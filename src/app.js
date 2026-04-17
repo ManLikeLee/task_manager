@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const helmet = require("helmet");
 
@@ -35,6 +36,7 @@ app.use(
 );
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "..", "public")));
 app.use(requestLogger);
 app.use(sanitizeRequest);
 app.use("/api", apiRateLimiter);
@@ -43,13 +45,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", routes);
 
 app.get("/", (_req, res) => {
-  res.status(200).json({
-    success: true,
-    data: {
-      service: "task-management-api",
-    },
-    message: "Task management API is running.",
-  });
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
 app.use(notFoundMiddleware);

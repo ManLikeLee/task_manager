@@ -184,6 +184,57 @@ const buildTaskListOrderBy = (sortBy, sortOrder) => [
   { id: sortOrder },
 ];
 
+const listProjectsForUser = async (userId) => {
+  const projects = await projectDbService.listProjects({
+    where: {
+      OR: [
+        {
+          workspace: {
+            ownerId: userId,
+          },
+        },
+        {
+          workspace: {
+            members: {
+              some: {
+                userId,
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+      _count: {
+        select: {
+          tasks: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+  });
+
+  return projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    status: project.status,
+    workspace: project.workspace,
+    taskCount: project._count.tasks,
+    updatedAt: project.updatedAt,
+  }));
+};
+
 const createTask = async (payload, userId) => {
   const { project } = await ensureProjectTaskManagementAccess(
     payload.projectId,
@@ -259,6 +310,7 @@ const deleteTask = async (taskId, userId) => {
 };
 
 module.exports = {
+  listProjectsForUser,
   createTask,
   getTasksByProject,
   updateTask,

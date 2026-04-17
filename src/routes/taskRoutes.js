@@ -15,6 +15,7 @@ const addDeprecatedTaskListWarning = (_req, res, next) => {
   next();
 };
 
+router.get("/projects", taskController.listProjects);
 router.post("/tasks", taskController.createTask);
 router.get("/projects/:projectId/tasks", taskController.getTasksByProject);
 // Backward-compatible route. Remove once clients are migrated.

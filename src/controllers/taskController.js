@@ -10,6 +10,17 @@ const {
 } = require("../validators/taskValidator");
 const taskService = require("../services/taskService");
 
+const listProjects = asyncHandler(async (req, res) => {
+  const projects = await taskService.listProjectsForUser(req.user.sub);
+
+  sendSuccess(res, {
+    message: "Projects fetched successfully.",
+    data: {
+      projects,
+    },
+  });
+});
+
 const createTask = asyncHandler(async (req, res) => {
   const payload = validate(createTaskSchema, req.body);
   const task = await taskService.createTask(payload, req.user.sub);
@@ -65,6 +76,7 @@ const deleteTask = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  listProjects,
   createTask,
   getTasksByProject,
   updateTask,

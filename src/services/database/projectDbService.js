@@ -26,10 +26,6 @@ const createProject = (data) =>
 
 const listProjects = (options = {}) =>
   prisma.project.findMany({
-    include: {
-      workspace: true,
-      tasks: true,
-    },
     ...options,
   });
 
