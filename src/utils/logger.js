@@ -1,20 +1,21 @@
-const formatMessage = (level, message, meta) => {
-  const timestamp = new Date().toISOString();
-  const serializedMeta = meta ? ` ${JSON.stringify(meta)}` : "";
+const serializeLog = (level, msg, meta = {}) =>
+  JSON.stringify({
+    level,
+    timestamp: new Date().toISOString(),
+    msg,
+    ...meta,
+  });
 
-  return `[${timestamp}] ${level.toUpperCase()}: ${message}${serializedMeta}`;
+const info = (msg, meta) => {
+  console.log(serializeLog("info", msg, meta));
 };
 
-const info = (message, meta) => {
-  console.log(formatMessage("info", message, meta));
+const warn = (msg, meta) => {
+  console.warn(serializeLog("warn", msg, meta));
 };
 
-const warn = (message, meta) => {
-  console.warn(formatMessage("warn", message, meta));
-};
-
-const error = (message, meta) => {
-  console.error(formatMessage("error", message, meta));
+const error = (msg, meta) => {
+  console.error(serializeLog("error", msg, meta));
 };
 
 module.exports = {

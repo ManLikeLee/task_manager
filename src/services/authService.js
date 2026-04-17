@@ -95,21 +95,27 @@ const loginUser = async (payload) => {
 
 const refreshUserAccessToken = async (refreshToken) => {
   if (!refreshToken) {
-    throw new AppError("Refresh token is required.", 401);
+    throw new AppError("Refresh token is required.", 401, null, "REFRESH_TOKEN_REQUIRED");
   }
 
   const decoded = verifyRefreshToken(refreshToken);
   const userRecord = await findUserById(decoded.sub);
 
   if (!userRecord || userRecord.refreshTokenHash !== hashToken(refreshToken)) {
-    throw new AppError("Refresh token is invalid.", 401);
+    throw new AppError("Refresh token is invalid.", 401, null, "INVALID_REFRESH_TOKEN");
   }
 
+  const tokenPayload = {
+    sub: userRecord.id,
+    email: userRecord.email,
+  };
+  const nextRefreshToken = generateRefreshToken(tokenPayload);
+
+  await updateRefreshToken(userRecord.id, hashToken(nextRefreshToken));
+
   return {
-    accessToken: generateAccessToken({
-      sub: userRecord.id,
-      email: userRecord.email,
-    }),
+    accessToken: generateAccessToken(tokenPayload),
+    refreshToken: nextRefreshToken,
   };
 };
 

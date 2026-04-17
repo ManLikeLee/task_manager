@@ -9,19 +9,19 @@ const requestLogger = (req, res, next) => {
   req.requestId = requestId;
   res.locals.requestId = requestId;
 
-  logger.info("Incoming request", {
+  logger.info("request.start", {
     requestId,
     method: req.method,
     path: req.originalUrl,
   });
 
   res.on("finish", () => {
-    logger.info("Request completed", {
+    logger.info("request.complete", {
       requestId,
       method: req.method,
       path: req.originalUrl,
       statusCode: res.statusCode,
-      durationMs: Date.now() - startedAt,
+      latencyMs: Date.now() - startedAt,
     });
   });
 

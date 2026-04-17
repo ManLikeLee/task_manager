@@ -1,4 +1,5 @@
 const logger = require("../utils/logger");
+const { sendError } = require("../utils/errorResponse");
 
 const notFoundMiddleware = (req, res) => {
   logger.warn("Route not found", {
@@ -7,10 +8,11 @@ const notFoundMiddleware = (req, res) => {
     path: req.originalUrl,
   });
 
-  res.status(404).json({
-    success: false,
-    data: null,
+  return sendError(res, {
+    statusCode: 404,
     message: `Route not found: ${req.originalUrl}`,
+    code: "ROUTE_NOT_FOUND",
+    requestId: req.requestId,
   });
 };
 

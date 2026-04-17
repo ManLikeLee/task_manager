@@ -6,6 +6,7 @@ const {
   updateTaskSchema,
   taskProjectParamsSchema,
   taskIdParamsSchema,
+  taskListQuerySchema,
 } = require("../validators/taskValidator");
 const taskService = require("../services/taskService");
 
@@ -24,12 +25,19 @@ const createTask = asyncHandler(async (req, res) => {
 
 const getTasksByProject = asyncHandler(async (req, res) => {
   const { projectId } = validate(taskProjectParamsSchema, req.params);
-  const tasks = await taskService.getTasksByProject(projectId, req.user.sub);
+  const query = validate(taskListQuerySchema, req.query);
+  const { tasks, nextCursor, hasMore } = await taskService.getTasksByProject(
+    projectId,
+    query,
+    req.user.sub,
+  );
 
   sendSuccess(res, {
     message: "Tasks fetched successfully.",
     data: {
       tasks,
+      nextCursor,
+      hasMore,
     },
   });
 });

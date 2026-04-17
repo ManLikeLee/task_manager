@@ -9,7 +9,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:validate": "prisma validate",
     "start": "node server.js",
-    "test": "echo \"No tests configured yet\""
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "NODE_ENV=test jest --config tests/jest.unit.config.cjs",
+    "test:integration": "NODE_ENV=test jest --config tests/jest.integration.config.cjs --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +29,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "prisma": "^6.16.3"
+    "jest": "^30.3.0",
+    "prisma": "^6.16.3",
+    "supertest": "^7.2.2"
   }
 }

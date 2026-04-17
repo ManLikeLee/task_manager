@@ -11,7 +11,7 @@ router.use(authRateLimiter);
 router.post("/register", authController.register);
 router.post("/login", authController.login);
 router.post("/refresh", authController.refreshAccessToken);
-router.post("/logout", verifyAccessToken, authController.logout);
+router.post("/logout", authController.logout);
 router.get("/me", verifyAccessToken, authController.getCurrentUser);
 
 module.exports = router;

@@ -1,4 +1,5 @@
 const logger = require("../utils/logger");
+const { sendError } = require("../utils/errorResponse");
 
 const errorHandlerMiddleware = (err, req, res, _next) => {
   logger.error(err.message || "Unhandled error.", {
@@ -11,36 +12,40 @@ const errorHandlerMiddleware = (err, req, res, _next) => {
   });
 
   if (err.code === "P2025") {
-    return res.status(404).json({
-      success: false,
-      data: null,
+    return sendError(res, {
+      statusCode: 404,
       message: "Requested resource was not found.",
+      code: "RESOURCE_NOT_FOUND",
+      requestId: req.requestId,
     });
   }
 
   if (err.code === "P2002") {
-    return res.status(409).json({
-      success: false,
-      data: null,
+    return sendError(res, {
+      statusCode: 409,
       message: "A record with this value already exists.",
+      code: "DUPLICATE_RECORD",
+      requestId: req.requestId,
     });
   }
 
   if (err.name === "PrismaClientValidationError") {
-    return res.status(400).json({
-      success: false,
-      data: null,
+    return sendError(res, {
+      statusCode: 400,
       message: "Invalid database operation.",
+      code: "INVALID_DATABASE_OPERATION",
+      requestId: req.requestId,
     });
   }
 
   const statusCode = err.statusCode || 500;
 
-  res.status(statusCode).json({
-    success: false,
-    data: null,
+  return sendError(res, {
+    statusCode,
     message: err.message || "Internal server error.",
-    errors: err.errors || undefined,
+    code: err.code,
+    errors: err.errors,
+    requestId: req.requestId,
   });
 };
 

@@ -55,17 +55,20 @@ const listTasks = (options = {}) =>
     ...options,
   });
 
-const listTasksByProject = (projectId, options = {}) =>
-  prisma.task.findMany({
-    where: {
-      projectId,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
+const listTasksByProject = (projectId, options = {}) => {
+  const { where, orderBy, ...rest } = options;
+
+  return prisma.task.findMany({
+    where: where
+      ? {
+          AND: [{ projectId }, where],
+        }
+      : { projectId },
+    orderBy: orderBy || [{ createdAt: "desc" }, { id: "desc" }],
     select: taskDetailSelect,
-    ...options,
+    ...rest,
   });
+};
 
 const getTaskById = (id, options = {}) =>
   prisma.task.findUnique({

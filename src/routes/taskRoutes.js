@@ -7,8 +7,22 @@ const router = express.Router();
 
 router.use(verifyAccessToken);
 
+const addDeprecatedTaskListWarning = (_req, res, next) => {
+  res.set(
+    "Warning",
+    '299 - "Deprecated endpoint, use /api/projects/:projectId/tasks"',
+  );
+  next();
+};
+
 router.post("/tasks", taskController.createTask);
-router.get("/tasks/:projectId", taskController.getTasksByProject);
+router.get("/projects/:projectId/tasks", taskController.getTasksByProject);
+// Backward-compatible route. Remove once clients are migrated.
+router.get(
+  "/tasks/:projectId",
+  addDeprecatedTaskListWarning,
+  taskController.getTasksByProject,
+);
 router.patch("/tasks/:id", taskController.updateTask);
 router.delete("/tasks/:id", taskController.deleteTask);
 

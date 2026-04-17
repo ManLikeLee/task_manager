@@ -1,14 +1,41 @@
 const REFRESH_COOKIE_NAME = "refreshToken";
 
+const parseCookieSameSite = () => {
+  const value = process.env.COOKIE_SAMESITE;
+
+  if (!value) {
+    return "strict";
+  }
+
+  const normalized = value.toLowerCase();
+
+  if (["strict", "lax", "none"].includes(normalized)) {
+    return normalized;
+  }
+
+  return "strict";
+};
+
+const parseCookieSecure = () => {
+  const value = process.env.COOKIE_SECURE;
+
+  if (value === undefined) {
+    return process.env.NODE_ENV === "production";
+  }
+
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+};
+
 const getRefreshCookieOptions = () => {
-  const isProduction = process.env.NODE_ENV === "production";
+  const domain = process.env.COOKIE_DOMAIN;
 
   return {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: "strict",
+    secure: parseCookieSecure(),
+    sameSite: parseCookieSameSite(),
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/api/auth",
+    ...(domain ? { domain } : {}),
   };
 };
 

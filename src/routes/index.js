@@ -6,6 +6,8 @@ const taskRoutes = require("./taskRoutes");
 const router = express.Router();
 
 router.get("/health", healthController.getHealthStatus);
+router.get("/health/live", healthController.getHealthLiveStatus);
+router.get("/health/ready", healthController.getHealthReadyStatus);
 router.use(taskRoutes);
 
 module.exports = router;

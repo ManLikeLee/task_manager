@@ -1,25 +1,52 @@
 const AppError = require("../utils/AppError");
+const authorizationPolicy = require("../policies/authorizationPolicy");
 const taskDbService = require("./database/taskDbService");
 const projectDbService = require("./database/projectDbService");
 const userDbService = require("./database/userDbService");
 const workspaceMemberDbService = require("./database/workspaceMemberDbService");
 
-const ensureWorkspaceAccess = async (workspace, userId) => {
+const getWorkspaceMembership = async (workspace, userId) => {
   if (workspace.ownerId === userId) {
-    return true;
+    return null;
   }
 
-  const membership =
-    await workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
-      workspace.id,
-      userId,
-    );
+  return workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
+    workspace.id,
+    userId,
+  );
+};
 
-  if (!membership) {
+const ensureWorkspaceAccess = async (workspace, userId) => {
+  const membership = await getWorkspaceMembership(workspace, userId);
+
+  if (!authorizationPolicy.canAccessWorkspace(userId, workspace, membership)) {
     throw new AppError("You do not have access to this workspace.", 403);
   }
 
-  return true;
+  return {
+    membership,
+    role: authorizationPolicy.resolveWorkspaceRole(userId, workspace, membership),
+  };
+};
+
+const ensureWorkspaceTaskManagementAccess = async (workspace, userId) => {
+  const membership = await getWorkspaceMembership(workspace, userId);
+
+  if (!authorizationPolicy.canAccessWorkspace(userId, workspace, membership)) {
+    throw new AppError("You do not have access to this workspace.", 403);
+  }
+
+  if (!authorizationPolicy.canManageTask(userId, workspace, membership)) {
+    throw new AppError(
+      "Insufficient permissions to manage tasks in this workspace.",
+      403,
+    );
+  }
+
+  return {
+    membership,
+    role: authorizationPolicy.resolveWorkspaceRole(userId, workspace, membership),
+  };
 };
 
 const ensureProjectAccess = async (projectId, userId) => {
@@ -29,9 +56,27 @@ const ensureProjectAccess = async (projectId, userId) => {
     throw new AppError("Project not found.", 404);
   }
 
-  await ensureWorkspaceAccess(project.workspace, userId);
+  const access = await ensureWorkspaceAccess(project.workspace, userId);
 
-  return project;
+  return {
+    project,
+    ...access,
+  };
+};
+
+const ensureProjectTaskManagementAccess = async (projectId, userId) => {
+  const project = await projectDbService.getProjectById(projectId);
+
+  if (!project) {
+    throw new AppError("Project not found.", 404);
+  }
+
+  const access = await ensureWorkspaceTaskManagementAccess(project.workspace, userId);
+
+  return {
+    project,
+    ...access,
+  };
 };
 
 const ensureTaskAccess = async (taskId, userId) => {
@@ -41,9 +86,27 @@ const ensureTaskAccess = async (taskId, userId) => {
     throw new AppError("Task not found.", 404);
   }
 
-  await ensureWorkspaceAccess(task.project.workspace, userId);
+  const access = await ensureWorkspaceAccess(task.project.workspace, userId);
 
-  return task;
+  return {
+    task,
+    ...access,
+  };
+};
+
+const ensureTaskManagementAccess = async (taskId, userId) => {
+  const task = await taskDbService.getTaskById(taskId);
+
+  if (!task) {
+    throw new AppError("Task not found.", 404);
+  }
+
+  const access = await ensureWorkspaceTaskManagementAccess(task.project.workspace, userId);
+
+  return {
+    task,
+    ...access,
+  };
 };
 
 const ensureAssigneeInWorkspace = async (workspace, assigneeId) => {
@@ -74,8 +137,58 @@ const ensureAssigneeInWorkspace = async (workspace, assigneeId) => {
   return assignee;
 };
 
+const buildTaskListWhere = (filters) => {
+  const where = {};
+
+  if (filters.status) {
+    where.status = filters.status;
+  }
+
+  if (filters.priority) {
+    where.priority = filters.priority;
+  }
+
+  if (filters.assigneeId) {
+    where.assigneeId = filters.assigneeId;
+  }
+
+  if (filters.dueBefore || filters.dueAfter) {
+    where.dueDate = {
+      ...(filters.dueBefore ? { lte: filters.dueBefore } : {}),
+      ...(filters.dueAfter ? { gte: filters.dueAfter } : {}),
+    };
+  }
+
+  if (filters.q) {
+    where.OR = [
+      {
+        title: {
+          contains: filters.q,
+          mode: "insensitive",
+        },
+      },
+      {
+        description: {
+          contains: filters.q,
+          mode: "insensitive",
+        },
+      },
+    ];
+  }
+
+  return where;
+};
+
+const buildTaskListOrderBy = (sortBy, sortOrder) => [
+  { [sortBy]: sortOrder },
+  { id: sortOrder },
+];
+
 const createTask = async (payload, userId) => {
-  const project = await ensureProjectAccess(payload.projectId, userId);
+  const { project } = await ensureProjectTaskManagementAccess(
+    payload.projectId,
+    userId,
+  );
 
   await ensureAssigneeInWorkspace(project.workspace, payload.assigneeId);
 
@@ -91,14 +204,35 @@ const createTask = async (payload, userId) => {
   });
 };
 
-const getTasksByProject = async (projectId, userId) => {
+const getTasksByProject = async (projectId, query, userId) => {
   await ensureProjectAccess(projectId, userId);
 
-  return taskDbService.listTasksByProject(projectId);
+  const take = query.limit + 1;
+  const items = await taskDbService.listTasksByProject(projectId, {
+    where: buildTaskListWhere(query),
+    orderBy: buildTaskListOrderBy(query.sortBy, query.sortOrder),
+    take,
+    ...(query.cursor
+      ? {
+          cursor: { id: query.cursor },
+          skip: 1,
+        }
+      : {}),
+  });
+
+  const hasMore = items.length > query.limit;
+  const tasks = hasMore ? items.slice(0, query.limit) : items;
+  const nextCursor = hasMore ? tasks[tasks.length - 1].id : null;
+
+  return {
+    tasks,
+    nextCursor,
+    hasMore,
+  };
 };
 
 const updateTask = async (taskId, payload, userId) => {
-  const task = await ensureTaskAccess(taskId, userId);
+  const { task } = await ensureTaskManagementAccess(taskId, userId);
 
   if (Object.prototype.hasOwnProperty.call(payload, "assigneeId")) {
     await ensureAssigneeInWorkspace(task.project.workspace, payload.assigneeId);
@@ -119,7 +253,7 @@ const updateTask = async (taskId, payload, userId) => {
 };
 
 const deleteTask = async (taskId, userId) => {
-  await ensureTaskAccess(taskId, userId);
+  await ensureTaskManagementAccess(taskId, userId);
 
   return taskDbService.deleteTask(taskId);
 };

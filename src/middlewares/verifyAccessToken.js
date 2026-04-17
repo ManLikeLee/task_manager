@@ -5,7 +5,9 @@ const verifyAccessTokenMiddleware = (req, _res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return next(new AppError("Access token is required.", 401));
+    return next(
+      new AppError("Access token is required.", 401, null, "ACCESS_TOKEN_REQUIRED"),
+    );
   }
 
   const token = authHeader.split(" ")[1];

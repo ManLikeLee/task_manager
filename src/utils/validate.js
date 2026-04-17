@@ -8,6 +8,7 @@ const validate = (schema, payload) => {
       "Validation failed.",
       400,
       result.error.issues.map((issue) => issue.message),
+      "VALIDATION_ERROR",
     );
   }
 

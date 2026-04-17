@@ -63,9 +63,43 @@ const taskIdParamsSchema = z.object({
   id: z.string().trim().uuid(cuidOrUuidMessage),
 });
 
+const taskListSortByEnum = z.enum([
+  "createdAt",
+  "updatedAt",
+  "dueDate",
+  "priority",
+  "status",
+  "title",
+]);
+
+const taskListSortOrderEnum = z.enum(["asc", "desc"]);
+
+const taskListQuerySchema = z
+  .object({
+    status: taskStatusEnum.optional(),
+    priority: taskPriorityEnum.optional(),
+    assigneeId: z.string().trim().uuid(cuidOrUuidMessage).optional(),
+    q: z.string().trim().min(1).max(255).optional(),
+    dueBefore: z.coerce.date().optional(),
+    dueAfter: z.coerce.date().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().trim().uuid(cuidOrUuidMessage).optional(),
+    sortBy: taskListSortByEnum.default("createdAt"),
+    sortOrder: taskListSortOrderEnum.default("desc"),
+  })
+  .refine(
+    (value) =>
+      !value.dueBefore || !value.dueAfter || value.dueAfter <= value.dueBefore,
+    {
+      message: "dueAfter must be before or equal to dueBefore.",
+      path: ["dueAfter"],
+    },
+  );
+
 module.exports = {
   createTaskSchema,
   updateTaskSchema,
   taskProjectParamsSchema,
   taskIdParamsSchema,
+  taskListQuerySchema,
 };

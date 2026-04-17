@@ -1,4 +1,5 @@
 const rateLimit = require("express-rate-limit");
+const { formatErrorResponse } = require("../utils/errorResponse");
 
 const createLimiter = ({ windowMs, max, message }) =>
   rateLimit({
@@ -6,9 +7,16 @@ const createLimiter = ({ windowMs, max, message }) =>
     max,
     standardHeaders: true,
     legacyHeaders: false,
-    message: {
-      success: false,
-      message,
+    handler: (req, res) => {
+      const statusCode = 429;
+      return res.status(statusCode).json(
+        formatErrorResponse({
+          statusCode,
+          message,
+          code: "RATE_LIMIT_EXCEEDED",
+          requestId: req.requestId,
+        }),
+      );
     },
   });
 

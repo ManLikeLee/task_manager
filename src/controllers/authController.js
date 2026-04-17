@@ -41,9 +41,13 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   const refreshToken = getCookieValue(req, "refreshToken");
   const data = await authService.refreshUserAccessToken(refreshToken);
 
+  setRefreshTokenCookie(res, data.refreshToken);
+
   sendSuccess(res, {
     message: "Access token refreshed successfully.",
-    data,
+    data: {
+      accessToken: data.accessToken,
+    },
   });
 });
 
