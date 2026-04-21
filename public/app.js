@@ -1,17 +1,91 @@
-const TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "BLOCKED"];
-const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const ROUTES = {
+  "/dashboard": { title: "Dashboard", subtitle: "Overview of your workspace" },
+  "/projects": { title: "Projects", subtitle: "Plan, track, and ship with clarity" },
+  "/tasks": { title: "Tasks", subtitle: "Manage execution on a kanban board" },
+};
+
+const TASK_STATUSES = ["TODO", "IN_PROGRESS", "DONE"];
+const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
+
+const KANBAN_COLUMNS = [
+  { key: "todo", title: "Todo", statuses: ["TODO", "BLOCKED"] },
+  { key: "progress", title: "In Progress", statuses: ["IN_PROGRESS", "IN_REVIEW"] },
+  { key: "done", title: "Done", statuses: ["DONE"] },
+];
 
 const state = {
   accessToken: localStorage.getItem("accessToken") || "",
   currentUser: null,
+  route: "/dashboard",
+  sidebarOpen: false,
+  authMode: "login",
   projects: [],
-  projectId: "",
   tasks: [],
-  appLoading: true,
+  selectedProjectId: "",
+  projectFilter: "",
+  overview: {
+    stats: {
+      totalProjects: 0,
+      totalTasks: 0,
+      inProgress: 0,
+      dueToday: 0,
+    },
+    recentActivity: [],
+  },
+  loadingApp: true,
   loadingProjects: false,
   loadingTasks: false,
-  authMode: "login",
-  modalOpen: false,
+  loadingOverview: false,
+  createProjectModalOpen: false,
+  createTaskModalOpen: false,
+};
+
+const DEV_API_BASE_CANDIDATES =
+  window.location.hostname === "localhost" && window.location.port === "3000"
+    ? ["http://127.0.0.1:5050", "http://localhost:5050", "http://127.0.0.1:5000", "http://localhost:5000", ""]
+    : [""];
+
+let activeApiBaseUrl = sessionStorage.getItem("taskforceApiBaseUrl") || "";
+
+const apiUrl = (path, baseUrl = activeApiBaseUrl) => {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  if (!path.startsWith("/")) {
+    return `${baseUrl}/${path}`;
+  }
+
+  return `${baseUrl}${path}`;
+};
+
+const fetchApi = async (path, options = {}) => {
+  const candidateBases = [...new Set([activeApiBaseUrl, ...DEV_API_BASE_CANDIDATES])];
+  let lastError = null;
+
+  for (const baseUrl of candidateBases) {
+    try {
+      const response = await fetch(apiUrl(path, baseUrl), options);
+      const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+      const isJson = contentType.includes("application/json");
+
+      if (!isJson && candidateBases.length > 1) {
+        lastError = new Error("Unexpected server response.");
+        continue;
+      }
+
+      if (baseUrl !== activeApiBaseUrl) {
+        activeApiBaseUrl = baseUrl;
+        sessionStorage.setItem("taskforceApiBaseUrl", activeApiBaseUrl);
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Unable to reach the backend API.");
 };
 
 const els = {
@@ -38,16 +112,44 @@ const escapeHtml = (value) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+const routeMeta = () => ROUTES[state.route] || ROUTES["/dashboard"];
+
+const initials = (name) => {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return "TF";
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+};
+
 const toIsoDateOrNull = (value) => {
   if (!value) return null;
+
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? null : date.toISOString();
 };
 
-const prettyDate = (value) => {
-  if (!value) return "No due date";
+const prettyDate = (value, withTime = false) => {
+  if (!value) return "-";
+
   const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return "No due date";
+  if (Number.isNaN(date.valueOf())) return "-";
+
+  if (withTime) {
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
   return date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -55,20 +157,10 @@ const prettyDate = (value) => {
   });
 };
 
-const formatLabel = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .split("_")
-    .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
-    .join(" ");
-
-const initials = (name) => {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "U";
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0].toUpperCase())
-    .join("");
+const normalizeRoute = (path) => {
+  if (path === "/") return "/dashboard";
+  if (Object.prototype.hasOwnProperty.call(ROUTES, path)) return path;
+  return "/dashboard";
 };
 
 const setAccessToken = (token) => {
@@ -108,16 +200,37 @@ const parseResponse = async (response) => {
 };
 
 const refreshAccessToken = async () => {
-  const response = await fetch("/api/auth/refresh", {
+  const response = await fetchApi("/api/auth/refresh", {
     method: "POST",
     credentials: "include",
   });
+
   const data = await parseResponse(response);
   setAccessToken(data.accessToken);
 };
 
+const clearSessionState = () => {
+  setAccessToken("");
+  state.currentUser = null;
+  state.projects = [];
+  state.tasks = [];
+  state.selectedProjectId = "";
+  state.projectFilter = "";
+  state.overview = {
+    stats: {
+      totalProjects: 0,
+      totalTasks: 0,
+      inProgress: 0,
+      dueToday: 0,
+    },
+    recentActivity: [],
+  };
+  state.createProjectModalOpen = false;
+  state.createTaskModalOpen = false;
+};
+
 const apiFetch = async (path, options = {}, retried = false) => {
-  const response = await fetch(path, {
+  const response = await fetchApi(path, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -132,11 +245,7 @@ const apiFetch = async (path, options = {}, retried = false) => {
       await refreshAccessToken();
       return apiFetch(path, options, true);
     } catch {
-      setAccessToken("");
-      state.currentUser = null;
-      state.projects = [];
-      state.projectId = "";
-      state.tasks = [];
+      clearSessionState();
       render();
     }
   }
@@ -144,182 +253,468 @@ const apiFetch = async (path, options = {}, retried = false) => {
   return parseResponse(response);
 };
 
-const Sidebar = () => `
-  <aside class="sidebar" aria-label="Main navigation">
-    <div class="sidebar__brand">
-      <div class="sidebar__logo" aria-hidden="true"></div>
-      <p class="sidebar__name">Task Manager</p>
-    </div>
-    <nav class="sidebar__nav">
-      <button class="nav-item" type="button">Dashboard</button>
-      <button class="nav-item" type="button">Projects</button>
-      <button class="nav-item is-active" type="button">Tasks</button>
-    </nav>
-  </aside>
-`;
+const selectedProject = () =>
+  state.projects.find((project) => project.id === state.selectedProjectId) || null;
 
-const Header = () => `
-  <header class="main-header">
-    <div>
-      <h1 class="main-header__title">Tasks</h1>
-      <p class="main-header__subtitle">Manage priorities, delivery timeline, and progress in one place.</p>
-    </div>
-    <div class="user-section">
-      <button
-        type="button"
-        class="btn btn-primary"
-        data-action="open-create-modal"
-        ${!state.projectId ? "disabled" : ""}
-      >
-        New Task
-      </button>
-      <div class="user-chip">
-        <div class="avatar">${escapeHtml(initials(state.currentUser?.name))}</div>
-        <span class="user-chip__text">${escapeHtml(state.currentUser?.name || "User")}</span>
-      </div>
-      <button type="button" class="btn btn-secondary" data-action="logout">Logout</button>
-    </div>
-  </header>
-`;
+const filteredProjects = () => {
+  const query = state.projectFilter.trim().toLowerCase();
 
-const ProjectSelector = () => {
-  const options = state.projects.length
-    ? state.projects
-        .map(
-          (project) => `
-            <option value="${escapeHtml(project.id)}" ${project.id === state.projectId ? "selected" : ""}>
-              ${escapeHtml(project.name)}
-            </option>
-          `,
-        )
-        .join("")
-    : '<option value="">No projects available</option>';
+  if (!query) return state.projects;
 
-  const projectMeta =
-    state.projects.find((project) => project.id === state.projectId) || null;
+  return state.projects.filter((project) => {
+    const name = String(project.name || "").toLowerCase();
+    const description = String(project.description || "").toLowerCase();
+    return name.includes(query) || description.includes(query);
+  });
+};
+
+const boardStatus = (status) => {
+  if (status === "IN_REVIEW") return "IN_PROGRESS";
+  if (status === "BLOCKED") return "TODO";
+  return status;
+};
+
+const groupedTasks = () =>
+  KANBAN_COLUMNS.map((column) => ({
+    ...column,
+    tasks: state.tasks.filter((task) => column.statuses.includes(task.status)),
+  }));
+
+const routeWithQuery = (path, query = {}) => {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      params.set(key, value);
+    }
+  }
+
+  const normalizedPath = normalizeRoute(path);
+  const queryString = params.toString();
+  return `${normalizedPath}${queryString ? `?${queryString}` : ""}`;
+};
+
+const readRouteFromLocation = () => {
+  const hashValue = String(window.location.hash || "").replace(/^#/, "");
+
+  if (hashValue) {
+    const [hashPath = "/", hashQuery = ""] = hashValue.split("?");
+
+    return {
+      path: hashPath || "/",
+      searchParams: new URLSearchParams(hashQuery),
+    };
+  }
+
+  return {
+    path: window.location.pathname,
+    searchParams: new URLSearchParams(window.location.search),
+  };
+};
+
+const navigate = (path, query = {}, replace = false) => {
+  const normalizedPath = normalizeRoute(path);
+  const target = routeWithQuery(normalizedPath, query);
+  const locationWithHash = `/#${target}`;
+
+  if (replace) {
+    window.history.replaceState({}, "", locationWithHash);
+  } else {
+    window.history.pushState({}, "", locationWithHash);
+  }
+
+  syncRouteFromLocation();
+  handleRouteData();
+  render();
+};
+
+const syncRouteFromLocation = () => {
+  const { path, searchParams } = readRouteFromLocation();
+  const nextRoute = normalizeRoute(path);
+
+  state.route = nextRoute;
+
+  if (nextRoute !== "/tasks") {
+    return;
+  }
+
+  const projectId = searchParams.get("projectId") || "";
+
+  if (projectId) {
+    state.selectedProjectId = projectId;
+  }
+};
+
+const SkeletonCards = (count = 4) =>
+  `<div class="skeleton-grid">${Array.from({ length: count })
+    .map(() => '<div class="skeleton-card"></div>')
+    .join("")}</div>`;
+
+const Sidebar = () => {
+  const userName = state.currentUser?.name || "TaskForce User";
 
   return `
-    <section class="surface">
-      <label for="projectSelect">Select Project</label>
-      <select id="projectSelect" data-action="project-select" ${!state.projects.length ? "disabled" : ""}>
-        ${options}
-      </select>
-      <p class="surface__meta">
-        ${projectMeta ? `${escapeHtml(projectMeta.workspace.name)} · ${projectMeta.taskCount} tasks` : "Choose a project to view tasks."}
-      </p>
+    <aside class="sidebar ${state.sidebarOpen ? "is-open" : ""}">
+      <div class="sidebar__brand">TaskForce</div>
+
+      <nav class="sidebar__nav" aria-label="Main navigation">
+        ${Object.entries(ROUTES)
+          .map(
+            ([path, meta]) => `
+            <button
+              type="button"
+              class="nav-link ${state.route === path ? "is-active" : ""}"
+              data-action="navigate"
+              data-route="${path}"
+            >
+              ${meta.title}
+            </button>
+          `,
+          )
+          .join("")}
+      </nav>
+
+      <div class="sidebar__footer">
+        <div class="sidebar-user">
+          <div class="avatar">${escapeHtml(initials(userName))}</div>
+          <div>
+            <p class="sidebar-user__name">${escapeHtml(userName)}</p>
+            <p class="sidebar-user__sub">Workspace user</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-full" data-action="logout">Logout</button>
+      </div>
+    </aside>
+  `;
+};
+
+const Header = () => {
+  const userName = state.currentUser?.name || "TaskForce User";
+
+  return `
+    <header class="top-header">
+      <div class="top-header__left">
+        <button type="button" class="menu-toggle" data-action="toggle-sidebar" aria-label="Open navigation">
+          <span></span><span></span><span></span>
+        </button>
+        <div>
+          <h1>${routeMeta().title}</h1>
+          <p>${routeMeta().subtitle}</p>
+        </div>
+      </div>
+
+      <div class="top-header__right">
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-action="open-create-task"
+          ${!state.projects.length ? "disabled" : ""}
+        >
+          New Task
+        </button>
+        <div class="top-user">
+          <div class="avatar">${escapeHtml(initials(userName))}</div>
+          <span>${escapeHtml(userName)}</span>
+        </div>
+      </div>
+    </header>
+  `;
+};
+
+const StatsCard = (label, value) => `
+  <article class="stats-card">
+    <p class="stats-card__label">${escapeHtml(label)}</p>
+    <p class="stats-card__value">${escapeHtml(value)}</p>
+  </article>
+`;
+
+const ActivityList = () => {
+  if (state.loadingOverview) {
+    return SkeletonCards(3);
+  }
+
+  if (!state.overview.recentActivity.length) {
+    return '<div class="empty-state">No recent activity yet.</div>';
+  }
+
+  return `
+    <div class="activity-list">
+      ${state.overview.recentActivity
+        .map(
+          (item) => `
+          <article class="activity-item">
+            <div>
+              <p class="activity-item__title">${escapeHtml(item.taskTitle)}</p>
+              <p class="activity-item__meta">${escapeHtml(item.action)} in ${escapeHtml(item.projectName)}</p>
+            </div>
+            <time class="activity-item__time">${escapeHtml(prettyDate(item.timestamp, true))}</time>
+          </article>
+        `,
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const DashboardPage = () => {
+  const stats = state.overview.stats;
+
+  return `
+    <section class="page-stack">
+      <section class="stats-grid">
+        ${StatsCard("Total Projects", String(stats.totalProjects))}
+        ${StatsCard("Total Tasks", String(stats.totalTasks))}
+        ${StatsCard("In Progress", String(stats.inProgress))}
+        ${StatsCard("Due Today", String(stats.dueToday))}
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Recent Activity</h2>
+        </div>
+        ${ActivityList()}
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Quick Actions</h2>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-secondary" type="button" data-action="open-create-project">Create Project</button>
+          <button class="btn btn-primary" type="button" data-action="open-create-task" ${!state.projects.length ? "disabled" : ""}>Create Task</button>
+        </div>
+      </section>
     </section>
   `;
+};
+
+const ProjectCard = (project) => `
+  <article class="project-card" data-action="open-project-tasks" data-project-id="${escapeHtml(project.id)}" role="button" tabindex="0">
+    <h3>${escapeHtml(project.name)}</h3>
+    <p class="project-card__description">${escapeHtml(project.description || "No description")}</p>
+    <div class="project-card__meta">
+      <span>${escapeHtml(String(project.taskCount))} tasks</span>
+      <span>${escapeHtml(prettyDate(project.createdAt))}</span>
+    </div>
+  </article>
+`;
+
+const ProjectsPage = () => {
+  if (state.loadingProjects) {
+    return SkeletonCards(6);
+  }
+
+  if (!state.projects.length) {
+    return `
+      <div class="empty-state">
+        <p>No projects yet</p>
+        <button type="button" class="btn btn-primary" data-action="open-create-project">New Project</button>
+      </div>
+    `;
+  }
+
+  return `
+    <section class="page-stack">
+      <div class="page-actions">
+        <button type="button" class="btn btn-primary" data-action="open-create-project">New Project</button>
+      </div>
+      <section class="projects-grid">
+        ${state.projects.map((project) => ProjectCard(project)).join("")}
+      </section>
+    </section>
+  `;
+};
+
+const priorityClass = (priority) => {
+  if (priority === "HIGH" || priority === "URGENT") return "priority-high";
+  if (priority === "MEDIUM") return "priority-medium";
+  return "priority-low";
 };
 
 const TaskCard = (task) => `
   <article class="task-card">
     <div>
-      <h3 class="task-card__title">${escapeHtml(task.title)}</h3>
-      <p class="task-card__description">${escapeHtml(task.description || "No description provided.")}</p>
+      <h4>${escapeHtml(task.title)}</h4>
+      <p>${escapeHtml(task.description || "No description")}</p>
     </div>
-    <div class="badges">
-      <span class="badge badge-status-${escapeHtml(task.status)}">${escapeHtml(formatLabel(task.status))}</span>
-      <span class="badge badge-priority-${escapeHtml(task.priority)}">${escapeHtml(formatLabel(task.priority))}</span>
+    <div class="task-card__meta-row">
+      <span class="priority-badge ${priorityClass(task.priority)}">${escapeHtml(task.priority || "LOW")}</span>
+      <span class="task-card__due">Due ${escapeHtml(prettyDate(task.dueDate))}</span>
     </div>
-    <div class="task-card__footer">
-      <p class="task-card__date">Due ${escapeHtml(prettyDate(task.dueDate))}</p>
-      <div class="task-card__actions">
-        <select data-action="update-task-status" data-task-id="${escapeHtml(task.id)}">
-          ${TASK_STATUSES.map(
-            (status) =>
-              `<option value="${status}" ${status === task.status ? "selected" : ""}>${formatLabel(status)}</option>`,
-          ).join("")}
-        </select>
-        <button type="button" class="btn btn-ghost" data-action="delete-task" data-task-id="${escapeHtml(task.id)}">
-          Delete
-        </button>
-      </div>
-    </div>
+    <label class="inline-label">
+      Move to
+      <select data-action="task-status" data-task-id="${escapeHtml(task.id)}">
+        ${TASK_STATUSES.map(
+          (status) =>
+            `<option value="${status}" ${boardStatus(task.status) === status ? "selected" : ""}>${status.replace("_", " ")}</option>`,
+        ).join("")}
+      </select>
+    </label>
   </article>
 `;
 
-const TaskList = () => {
-  if (!state.projectId) {
-    return '<div class="empty-state">Select a project to get started.</div>';
+const Column = (column) => `
+  <section class="kanban-column">
+    <header class="kanban-column__header">
+      <h3>${escapeHtml(column.title)}</h3>
+      <span>${column.tasks.length}</span>
+    </header>
+    <div class="kanban-column__body">
+      ${
+        column.tasks.length
+          ? column.tasks.map((task) => TaskCard(task)).join("")
+          : '<div class="kanban-empty">No tasks yet</div>'
+      }
+    </div>
+  </section>
+`;
+
+const KanbanBoard = () => {
+  if (!state.selectedProjectId) {
+    return '<div class="empty-state">No projects yet</div>';
   }
 
   if (state.loadingTasks) {
-    return '<div class="loading-state">Loading tasks...</div>';
+    return SkeletonCards(3);
   }
 
   if (!state.tasks.length) {
-    return '<div class="empty-state">No tasks yet. Create your first task for this project.</div>';
+    return '<div class="empty-state">No tasks yet</div>';
   }
 
-  return `<div class="task-list">${state.tasks.map(TaskCard).join("")}</div>`;
+  return `<div class="kanban-board">${groupedTasks().map((column) => Column(column)).join("")}</div>`;
 };
 
-const CreateTaskModal = () => `
-  <div class="modal" ${!state.modalOpen ? "hidden" : ""}>
-    <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="createTaskHeading">
-      <div class="modal__head">
-        <div>
-          <h2 id="createTaskHeading" class="modal__title">Create Task</h2>
-          <p class="modal__subtitle">Add details and assign priority to keep your project moving.</p>
+const TasksPage = () => {
+  const projects = filteredProjects();
+
+  return `
+    <section class="page-stack">
+      <section class="panel">
+        <div class="task-toolbar">
+          <label>
+            Search Projects
+            <input type="search" data-action="project-filter" value="${escapeHtml(state.projectFilter)}" placeholder="Filter projects" />
+          </label>
+          <label>
+            Select Project
+            <select data-action="project-select" ${projects.length ? "" : "disabled"}>
+              ${
+                projects.length
+                  ? projects
+                      .map(
+                        (project) =>
+                          `<option value="${project.id}" ${project.id === state.selectedProjectId ? "selected" : ""}>${escapeHtml(project.name)}</option>`,
+                      )
+                      .join("")
+                  : '<option value="">No projects yet</option>'
+              }
+            </select>
+          </label>
         </div>
-        <button class="btn btn-ghost" type="button" data-action="close-create-modal">Close</button>
-      </div>
-      <form id="createTaskForm" class="auth-form" novalidate>
+      </section>
+
+      ${KanbanBoard()}
+    </section>
+  `;
+};
+
+const CreateProjectModal = () => `
+  <div class="modal ${state.createProjectModalOpen ? "is-open" : ""}">
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="createProjectTitle">
+      <header class="modal__header">
+        <h2 id="createProjectTitle">Create Project</h2>
+        <button type="button" class="btn btn-ghost" data-action="close-create-project">Cancel</button>
+      </header>
+      <form id="createProjectForm" class="modal__form">
+        <label>
+          Name
+          <input name="name" type="text" maxlength="120" required />
+        </label>
+        <label>
+          Description
+          <textarea name="description" rows="4" maxlength="2000"></textarea>
+        </label>
+        <div class="modal__actions">
+          <button type="button" class="btn btn-ghost" data-action="close-create-project">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+`;
+
+const CreateTaskModal = () => `
+  <div class="modal ${state.createTaskModalOpen ? "is-open" : ""}">
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="createTaskTitle">
+      <header class="modal__header">
+        <h2 id="createTaskTitle">Create Task</h2>
+        <button type="button" class="btn btn-ghost" data-action="close-create-task">Cancel</button>
+      </header>
+      <form id="createTaskForm" class="modal__form">
+        <label>
+          Project
+          <select name="projectId" required>
+            ${state.projects
+              .map(
+                (project) =>
+                  `<option value="${project.id}" ${project.id === state.selectedProjectId ? "selected" : ""}>${escapeHtml(project.name)}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
         <label>
           Title
           <input name="title" type="text" maxlength="255" required />
         </label>
         <label>
           Description
-          <textarea name="description" rows="3" maxlength="5000"></textarea>
+          <textarea name="description" rows="4" maxlength="5000"></textarea>
         </label>
-        <div class="grid-2">
+        <div class="split-grid">
           <label>
             Status
             <select name="status">
-              ${TASK_STATUSES.map((status) => `<option>${status}</option>`).join("")}
+              ${TASK_STATUSES.map((status) => `<option value="${status}">${status.replace("_", " ")}</option>`).join("")}
             </select>
           </label>
           <label>
             Priority
             <select name="priority">
-              ${TASK_PRIORITIES.map(
-                (priority) =>
-                  `<option ${priority === "MEDIUM" ? "selected" : ""}>${priority}</option>`,
-              ).join("")}
+              ${TASK_PRIORITIES.map((priority) => `<option value="${priority}">${priority}</option>`).join("")}
             </select>
           </label>
+          <label>
+            Due date
+            <input name="dueDate" type="date" />
+          </label>
         </div>
-        <label>
-          Due date
-          <input name="dueDate" type="date" />
-        </label>
-        <button type="submit" class="btn btn-primary" ${!state.projectId ? "disabled" : ""}>Create Task</button>
+        <div class="modal__actions">
+          <button type="button" class="btn btn-ghost" data-action="close-create-task">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
       </form>
     </div>
   </div>
 `;
 
-const AuthCard = () => {
+const AuthPage = () => {
   const isLogin = state.authMode === "login";
 
   return `
     <main class="auth-shell">
       <section class="auth-card">
-        <div class="auth-card__heading">
-          <h2>${isLogin ? "Welcome back" : "Create your account"}</h2>
-          <p>${isLogin ? "Sign in to continue to your workspace." : "Join your workspace and start organizing tasks."}</p>
-        </div>
-
-        <div class="auth-switch" role="tablist" aria-label="Authentication mode">
-          <button type="button" class="btn ${isLogin ? "btn-primary" : "btn-secondary"}" data-action="switch-auth" data-mode="login">Login</button>
-          <button type="button" class="btn ${!isLogin ? "btn-primary" : "btn-secondary"}" data-action="switch-auth" data-mode="register">Register</button>
+        <h1>TaskForce</h1>
+        <p>Minimal task operations for focused teams.</p>
+        <div class="auth-switch">
+          <button class="btn ${isLogin ? "btn-primary" : "btn-secondary"}" type="button" data-action="switch-auth" data-mode="login">Login</button>
+          <button class="btn ${!isLogin ? "btn-primary" : "btn-secondary"}" type="button" data-action="switch-auth" data-mode="register">Register</button>
         </div>
 
         ${
           isLogin
             ? `
-            <form id="loginForm" class="auth-form" novalidate>
+            <form id="loginForm" class="auth-form">
               <label>
                 Email
                 <input name="email" type="email" required />
@@ -328,11 +723,11 @@ const AuthCard = () => {
                 Password
                 <input name="password" type="password" required />
               </label>
-              <button type="submit" class="btn btn-primary">Login</button>
+              <button class="btn btn-primary" type="submit">Login</button>
             </form>
           `
             : `
-            <form id="registerForm" class="auth-form" novalidate>
+            <form id="registerForm" class="auth-form">
               <label>
                 Name
                 <input name="name" type="text" minlength="2" maxlength="100" required />
@@ -345,7 +740,7 @@ const AuthCard = () => {
                 Password
                 <input name="password" type="password" minlength="8" required />
               </label>
-              <button type="submit" class="btn btn-primary">Create account</button>
+              <button class="btn btn-primary" type="submit">Create account</button>
             </form>
           `
         }
@@ -354,30 +749,34 @@ const AuthCard = () => {
   `;
 };
 
-const Dashboard = () => `
-  <div class="dashboard-shell app-shell">
+const MainContent = () => {
+  if (state.route === "/projects") return ProjectsPage();
+  if (state.route === "/tasks") return TasksPage();
+  return DashboardPage();
+};
+
+const AppShell = () => `
+  <div class="app-shell">
+    <div class="sidebar-overlay ${state.sidebarOpen ? "is-open" : ""}" data-action="close-sidebar"></div>
     ${Sidebar()}
-    <main class="main-content">
+
+    <section class="main-shell">
       ${Header()}
-      ${ProjectSelector()}
-      <section class="surface" aria-live="polite">
-        <div class="task-header">
-          <h2 class="surface__title">Task List</h2>
-        </div>
-        ${TaskList()}
-      </section>
-    </main>
+      <main class="content">${MainContent()}</main>
+    </section>
+
+    ${CreateProjectModal()}
     ${CreateTaskModal()}
   </div>
 `;
 
 const render = () => {
-  if (state.appLoading) {
-    els.app.innerHTML = '<main class="auth-shell"><div class="loading-state">Loading workspace...</div></main>';
+  if (state.loadingApp) {
+    els.app.innerHTML = '<main class="auth-shell"><div class="empty-state">Loading TaskForce...</div></main>';
     return;
   }
 
-  els.app.innerHTML = state.currentUser ? Dashboard() : AuthCard();
+  els.app.innerHTML = state.currentUser ? AppShell() : AuthPage();
 };
 
 const loadProjects = async () => {
@@ -385,21 +784,11 @@ const loadProjects = async () => {
   render();
 
   try {
-    const data = await apiFetch("/api/projects", {
-      method: "GET",
-    });
-
+    const data = await apiFetch("/api/projects", { method: "GET" });
     state.projects = data.projects || [];
 
-    if (!state.projects.some((project) => project.id === state.projectId)) {
-      state.projectId = state.projects[0]?.id || "";
-    }
-
-    if (state.projectId) {
-      await loadTasks(state.projectId);
-    } else {
-      state.tasks = [];
-      render();
+    if (!state.projects.some((project) => project.id === state.selectedProjectId)) {
+      state.selectedProjectId = state.projects[0]?.id || "";
     }
   } finally {
     state.loadingProjects = false;
@@ -407,7 +796,23 @@ const loadProjects = async () => {
   }
 };
 
-const loadTasks = async (projectId) => {
+const loadDashboardOverview = async () => {
+  state.loadingOverview = true;
+  render();
+
+  try {
+    const data = await apiFetch("/api/dashboard/overview", { method: "GET" });
+    state.overview = {
+      stats: data.stats || state.overview.stats,
+      recentActivity: data.recentActivity || [],
+    };
+  } finally {
+    state.loadingOverview = false;
+    render();
+  }
+};
+
+const loadTasksForProject = async (projectId) => {
   if (!projectId) {
     state.tasks = [];
     render();
@@ -418,10 +823,8 @@ const loadTasks = async (projectId) => {
   render();
 
   try {
-    const data = await apiFetch(`/api/projects/${projectId}/tasks`, {
-      method: "GET",
-    });
-    state.tasks = data.tasks;
+    const data = await apiFetch(`/api/projects/${projectId}/tasks`, { method: "GET" });
+    state.tasks = data.tasks || [];
   } finally {
     state.loadingTasks = false;
     render();
@@ -430,6 +833,7 @@ const loadTasks = async (projectId) => {
 
 const login = async (form) => {
   const formData = new FormData(form);
+
   const data = await apiFetch("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({
@@ -441,11 +845,14 @@ const login = async (form) => {
   setAccessToken(data.accessToken);
   state.currentUser = data.user;
   notify("Login successful.");
-  await loadProjects();
+
+  await Promise.all([loadProjects(), loadDashboardOverview()]);
+  await handleRouteData();
 };
 
 const register = async (form) => {
   const formData = new FormData(form);
+
   await apiFetch("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({
@@ -460,28 +867,61 @@ const register = async (form) => {
   render();
 };
 
-const createTask = async (form) => {
-  if (!state.projectId) {
-    throw new Error("Select a project before creating tasks.");
+const createProject = async (form) => {
+  const formData = new FormData(form);
+
+  const data = await apiFetch("/api/projects", {
+    method: "POST",
+    body: JSON.stringify({
+      name: String(formData.get("name") || "").trim(),
+      description: String(formData.get("description") || "").trim() || null,
+    }),
+  });
+
+  notify("Project created.");
+  state.createProjectModalOpen = false;
+
+  await Promise.all([loadProjects(), loadDashboardOverview()]);
+
+  if (data.project?.id) {
+    state.selectedProjectId = data.project.id;
   }
 
+  navigate("/tasks", { projectId: state.selectedProjectId });
+};
+
+const createTask = async (form) => {
   const formData = new FormData(form);
+  const projectId = String(formData.get("projectId") || "").trim();
+
+  if (!projectId) {
+    throw new Error("Select a project first.");
+  }
 
   await apiFetch("/api/tasks", {
     method: "POST",
     body: JSON.stringify({
-      projectId: state.projectId,
+      projectId,
       title: String(formData.get("title") || "").trim(),
       description: String(formData.get("description") || "").trim() || null,
       status: String(formData.get("status") || "TODO"),
-      priority: String(formData.get("priority") || "MEDIUM"),
+      priority: String(formData.get("priority") || "LOW"),
       dueDate: toIsoDateOrNull(String(formData.get("dueDate") || "")),
     }),
   });
 
-  notify("Task created successfully.");
-  state.modalOpen = false;
-  await loadTasks(state.projectId);
+  state.createTaskModalOpen = false;
+  state.selectedProjectId = projectId;
+
+  notify("Task created.");
+
+  await Promise.all([loadProjects(), loadDashboardOverview(), loadTasksForProject(projectId)]);
+
+  if (state.route !== "/tasks") {
+    navigate("/tasks", { projectId });
+  } else {
+    navigate("/tasks", { projectId }, true);
+  }
 };
 
 const updateTaskStatus = async (taskId, status) => {
@@ -493,62 +933,135 @@ const updateTaskStatus = async (taskId, status) => {
   state.tasks = state.tasks.map((task) =>
     task.id === taskId ? { ...task, status } : task,
   );
-  notify("Task updated.");
+
+  notify("Task moved.");
   render();
+  await loadDashboardOverview();
 };
 
-const deleteTask = async (taskId) => {
-  await apiFetch(`/api/tasks/${taskId}`, {
-    method: "DELETE",
-  });
+const handleRouteData = async () => {
+  if (!state.currentUser) return;
 
-  notify("Task deleted.");
-  state.tasks = state.tasks.filter((task) => task.id !== taskId);
-  render();
+  if (state.route === "/tasks") {
+    const { searchParams } = readRouteFromLocation();
+    const queryProjectId = searchParams.get("projectId") || "";
+
+    if (queryProjectId && state.projects.some((project) => project.id === queryProjectId)) {
+      state.selectedProjectId = queryProjectId;
+    }
+
+    if (!state.selectedProjectId && state.projects.length) {
+      state.selectedProjectId = state.projects[0].id;
+      navigate("/tasks", { projectId: state.selectedProjectId }, true);
+      return;
+    }
+
+    await loadTasksForProject(state.selectedProjectId);
+  }
 };
 
 els.app.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action]");
-  if (!button) return;
+  const actionable = event.target.closest("[data-action]");
+  if (!actionable) return;
 
-  const { action } = button.dataset;
+  const action = actionable.dataset.action;
 
   try {
     if (action === "switch-auth") {
-      state.authMode = button.dataset.mode === "register" ? "register" : "login";
+      state.authMode = actionable.dataset.mode === "register" ? "register" : "login";
       render();
+      return;
     }
 
-    if (action === "open-create-modal") {
-      state.modalOpen = true;
-      render();
+    if (action === "navigate") {
+      state.sidebarOpen = false;
+      navigate(actionable.dataset.route || "/dashboard");
+      return;
     }
 
-    if (action === "close-create-modal") {
-      state.modalOpen = false;
+    if (action === "toggle-sidebar") {
+      state.sidebarOpen = !state.sidebarOpen;
       render();
+      return;
+    }
+
+    if (action === "close-sidebar") {
+      state.sidebarOpen = false;
+      render();
+      return;
+    }
+
+    if (action === "open-create-project") {
+      state.createProjectModalOpen = true;
+      render();
+      return;
+    }
+
+    if (action === "close-create-project") {
+      state.createProjectModalOpen = false;
+      render();
+      return;
+    }
+
+    if (action === "open-create-task") {
+      if (!state.selectedProjectId && state.projects.length) {
+        state.selectedProjectId = state.projects[0].id;
+      }
+
+      state.createTaskModalOpen = true;
+      render();
+      return;
+    }
+
+    if (action === "close-create-task") {
+      state.createTaskModalOpen = false;
+      render();
+      return;
+    }
+
+    if (action === "open-project-tasks") {
+      const projectId = actionable.dataset.projectId;
+      if (!projectId) return;
+
+      state.selectedProjectId = projectId;
+      navigate("/tasks", { projectId });
+      return;
     }
 
     if (action === "logout") {
-      await apiFetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      setAccessToken("");
-      state.currentUser = null;
-      state.projects = [];
-      state.tasks = [];
-      state.projectId = "";
-      state.modalOpen = false;
+      await apiFetch("/api/auth/logout", { method: "POST" });
+      clearSessionState();
       notify("Logged out.");
       render();
-    }
-
-    if (action === "delete-task") {
-      await deleteTask(button.dataset.taskId);
+      return;
     }
   } catch (error) {
     notify(error.message, "error");
+  }
+});
+
+els.app.addEventListener("keydown", (event) => {
+  const projectCard = event.target.closest("[data-action='open-project-tasks']");
+
+  if (!projectCard) return;
+
+  if (event.key !== "Enter" && event.key !== " ") return;
+
+  event.preventDefault();
+
+  const projectId = projectCard.dataset.projectId;
+  if (!projectId) return;
+
+  state.selectedProjectId = projectId;
+  navigate("/tasks", { projectId });
+});
+
+els.app.addEventListener("input", (event) => {
+  const target = event.target;
+
+  if (target.matches('[data-action="project-filter"]')) {
+    state.projectFilter = target.value;
+    render();
   }
 });
 
@@ -557,12 +1070,17 @@ els.app.addEventListener("change", async (event) => {
 
   try {
     if (target.matches('[data-action="project-select"]')) {
-      state.projectId = target.value;
-      await loadTasks(state.projectId);
+      state.selectedProjectId = target.value;
+      navigate("/tasks", { projectId: state.selectedProjectId }, true);
+      await loadTasksForProject(state.selectedProjectId);
+      return;
     }
 
-    if (target.matches('[data-action="update-task-status"]')) {
-      await updateTaskStatus(target.dataset.taskId, target.value);
+    if (target.matches('[data-action="task-status"]')) {
+      const taskId = target.dataset.taskId;
+      if (!taskId) return;
+
+      await updateTaskStatus(taskId, target.value);
     }
   } catch (error) {
     notify(error.message, "error");
@@ -577,6 +1095,7 @@ els.app.addEventListener("submit", async (event) => {
   try {
     if (form.id === "loginForm") {
       await login(form);
+      render();
       return;
     }
 
@@ -585,20 +1104,38 @@ els.app.addEventListener("submit", async (event) => {
       return;
     }
 
+    if (form.id === "createProjectForm") {
+      await createProject(form);
+      return;
+    }
+
     if (form.id === "createTaskForm") {
       await createTask(form);
-      return;
     }
   } catch (error) {
     notify(error.message, "error");
   }
 });
 
+window.addEventListener("popstate", async () => {
+  syncRouteFromLocation();
+  render();
+  await handleRouteData();
+});
+
 const bootstrap = async () => {
+  const { path } = readRouteFromLocation();
+
+  if (normalizeRoute(path) === "/dashboard" && !window.location.hash) {
+    window.history.replaceState({}, "", "/#/dashboard");
+  }
+
+  syncRouteFromLocation();
+
   render();
 
   if (!state.accessToken) {
-    state.appLoading = false;
+    state.loadingApp = false;
     render();
     return;
   }
@@ -609,15 +1146,13 @@ const bootstrap = async () => {
     });
 
     state.currentUser = data.user;
-    await loadProjects();
+
+    await Promise.all([loadProjects(), loadDashboardOverview()]);
+    await handleRouteData();
   } catch {
-    setAccessToken("");
-    state.currentUser = null;
-    state.projects = [];
-    state.tasks = [];
-    state.projectId = "";
+    clearSessionState();
   } finally {
-    state.appLoading = false;
+    state.loadingApp = false;
     render();
   }
 };

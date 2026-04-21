@@ -24,6 +24,7 @@ const generateAccessToken = (payload) =>
 const generateRefreshToken = (payload) =>
   jwt.sign(payload, refreshSecret(), {
     expiresIn: refreshExpiry(),
+    jwtid: crypto.randomUUID(),
   });
 
 const verifyAccessToken = (token) => jwt.verify(token, accessSecret());

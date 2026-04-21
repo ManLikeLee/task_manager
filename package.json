@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "node --watch server.js",
+    "frontend": "node frontend-server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:validate": "prisma validate",

@@ -57,7 +57,7 @@ const registerUser = async (payload) => {
   });
 
   return {
-    user,
+    user: toSafeUser(user),
   };
 };
 

@@ -15,6 +15,34 @@ const errorHandlerMiddleware = require("./middlewares/errorHandlerMiddleware");
 const app = express();
 const allowedOrigin = process.env.CLIENT_URL;
 
+const buildAllowedOrigins = (origin) => {
+  const origins = new Set();
+
+  if (!origin) {
+    return origins;
+  }
+
+  origins.add(origin);
+
+  try {
+    const parsed = new URL(origin);
+    const isLocalHost =
+      parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+
+    if (isLocalHost) {
+      const alternateHost =
+        parsed.hostname === "localhost" ? "127.0.0.1" : "localhost";
+      origins.add(`${parsed.protocol}//${alternateHost}${parsed.port ? `:${parsed.port}` : ""}`);
+    }
+  } catch {
+    // Ignore invalid CLIENT_URL format and keep the original value only.
+  }
+
+  return origins;
+};
+
+const allowedOrigins = buildAllowedOrigins(allowedOrigin);
+
 app.disable("x-powered-by");
 app.use(
   helmet({
@@ -25,7 +53,7 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || !allowedOrigin || origin === allowedOrigin) {
+      if (!origin || !allowedOrigin || allowedOrigins.has(origin)) {
         return callback(null, true);
       }
 
@@ -44,7 +72,7 @@ app.use("/api", apiRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api", routes);
 
-app.get("/", (_req, res) => {
+app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
