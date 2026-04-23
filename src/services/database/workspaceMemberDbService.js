@@ -19,13 +19,19 @@ const createWorkspaceMember = (data) =>
   });
 
 const listWorkspaceMembers = (options = {}) =>
-  prisma.workspaceMember.findMany({
-    include: {
-      user: true,
-      workspace: true,
-    },
-    ...options,
-  });
+  prisma.workspaceMember.findMany(
+    options.select || options.include
+      ? {
+          ...options,
+        }
+      : {
+          include: {
+            user: true,
+            workspace: true,
+          },
+          ...options,
+        },
+  );
 
 const getWorkspaceMemberById = (id, options = {}) =>
   prisma.workspaceMember.findUnique({

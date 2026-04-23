@@ -7,8 +7,29 @@ const {
   taskProjectParamsSchema,
   taskIdParamsSchema,
   taskListQuerySchema,
+  createTaskCommentSchema,
 } = require("../validators/taskValidator");
+const { createProjectSchema } = require("../validators/projectValidator");
+const {
+  workspaceIdParamsSchema,
+  teamIdParamsSchema,
+  teamMemberIdParamsSchema,
+  projectIdParamsSchema,
+  createTeamSchema,
+  updateTeamSchema,
+  addTeamMemberSchema,
+  linkProjectTeamSchema,
+} = require("../validators/teamValidator");
 const taskService = require("../services/taskService");
+
+const getDashboardOverview = asyncHandler(async (req, res) => {
+  const overview = await taskService.getDashboardOverview(req.user.sub);
+
+  sendSuccess(res, {
+    message: "Dashboard overview fetched successfully.",
+    data: overview,
+  });
+});
 
 const listProjects = asyncHandler(async (req, res) => {
   const projects = await taskService.listProjectsForUser(req.user.sub);
@@ -17,6 +38,19 @@ const listProjects = asyncHandler(async (req, res) => {
     message: "Projects fetched successfully.",
     data: {
       projects,
+    },
+  });
+});
+
+const createProject = asyncHandler(async (req, res) => {
+  const payload = validate(createProjectSchema, req.body);
+  const project = await taskService.createProjectForUser(payload, req.user.sub);
+
+  sendSuccess(res, {
+    statusCode: 201,
+    message: "Project created successfully.",
+    data: {
+      project,
     },
   });
 });
@@ -53,6 +87,18 @@ const getTasksByProject = asyncHandler(async (req, res) => {
   });
 });
 
+const listProjectAssignees = asyncHandler(async (req, res) => {
+  const { projectId } = validate(taskProjectParamsSchema, req.params);
+  const assignees = await taskService.listProjectAssignees(projectId, req.user.sub);
+
+  sendSuccess(res, {
+    message: "Project assignees fetched successfully.",
+    data: {
+      assignees,
+    },
+  });
+});
+
 const updateTask = asyncHandler(async (req, res) => {
   const { id } = validate(taskIdParamsSchema, req.params);
   const payload = validate(updateTaskSchema, req.body);
@@ -75,10 +121,172 @@ const deleteTask = asyncHandler(async (req, res) => {
   });
 });
 
+const listTaskComments = asyncHandler(async (req, res) => {
+  const { id } = validate(taskIdParamsSchema, req.params);
+  const comments = await taskService.listTaskComments(id, req.user.sub);
+
+  sendSuccess(res, {
+    message: "Task comments fetched successfully.",
+    data: {
+      comments,
+    },
+  });
+});
+
+const createTaskComment = asyncHandler(async (req, res) => {
+  const { id } = validate(taskIdParamsSchema, req.params);
+  const payload = validate(createTaskCommentSchema, req.body);
+  const comment = await taskService.createTaskComment(id, payload, req.user.sub);
+
+  sendSuccess(res, {
+    statusCode: 201,
+    message: "Comment posted successfully.",
+    data: {
+      comment,
+    },
+  });
+});
+
+const listTeams = asyncHandler(async (req, res) => {
+  const teams = await taskService.listTeamsForUser(req.user.sub);
+
+  sendSuccess(res, {
+    message: "Teams fetched successfully.",
+    data: {
+      teams,
+    },
+  });
+});
+
+const listWorkspaceTeams = asyncHandler(async (req, res) => {
+  const { workspaceId } = validate(workspaceIdParamsSchema, req.params);
+  const teams = await taskService.listTeamsByWorkspace(workspaceId, req.user.sub);
+
+  sendSuccess(res, {
+    message: "Workspace teams fetched successfully.",
+    data: {
+      teams,
+    },
+  });
+});
+
+const createTeam = asyncHandler(async (req, res) => {
+  const { workspaceId } = validate(workspaceIdParamsSchema, req.params);
+  const payload = validate(createTeamSchema, req.body);
+  const team = await taskService.createTeamInWorkspace(
+    workspaceId,
+    payload,
+    req.user.sub,
+  );
+
+  sendSuccess(res, {
+    statusCode: 201,
+    message: "Team created successfully.",
+    data: {
+      team,
+    },
+  });
+});
+
+const listWorkspaceMembers = asyncHandler(async (req, res) => {
+  const { workspaceId } = validate(workspaceIdParamsSchema, req.params);
+  const members = await taskService.listWorkspaceMembersForWorkspace(
+    workspaceId,
+    req.user.sub,
+  );
+
+  sendSuccess(res, {
+    message: "Workspace members fetched successfully.",
+    data: {
+      members,
+    },
+  });
+});
+
+const updateTeam = asyncHandler(async (req, res) => {
+  const { teamId } = validate(teamIdParamsSchema, req.params);
+  const payload = validate(updateTeamSchema, req.body);
+  const team = await taskService.updateTeam(teamId, payload, req.user.sub);
+
+  sendSuccess(res, {
+    message: "Team updated successfully.",
+    data: {
+      team,
+    },
+  });
+});
+
+const listMembersForTeam = asyncHandler(async (req, res) => {
+  const { teamId } = validate(teamIdParamsSchema, req.params);
+  const members = await taskService.listTeamMembers(teamId, req.user.sub);
+
+  sendSuccess(res, {
+    message: "Team members fetched successfully.",
+    data: {
+      members,
+    },
+  });
+});
+
+const addMemberToTeam = asyncHandler(async (req, res) => {
+  const { teamId } = validate(teamIdParamsSchema, req.params);
+  const payload = validate(addTeamMemberSchema, req.body);
+  const member = await taskService.addTeamMember(teamId, payload, req.user.sub);
+
+  sendSuccess(res, {
+    statusCode: 201,
+    message: "Team member added successfully.",
+    data: {
+      member,
+    },
+  });
+});
+
+const removeMemberFromTeam = asyncHandler(async (req, res) => {
+  const { teamId } = validate(teamIdParamsSchema, req.params);
+  const { memberId } = validate(teamMemberIdParamsSchema, req.params);
+  await taskService.removeTeamMember(teamId, memberId, req.user.sub);
+
+  sendSuccess(res, {
+    message: "Team member removed successfully.",
+  });
+});
+
+const linkProjectTeam = asyncHandler(async (req, res) => {
+  const { projectId } = validate(projectIdParamsSchema, req.params);
+  const payload = validate(linkProjectTeamSchema, req.body);
+  const project = await taskService.linkProjectToTeam(
+    projectId,
+    payload.teamId,
+    req.user.sub,
+  );
+
+  sendSuccess(res, {
+    message: "Project team updated successfully.",
+    data: {
+      project,
+    },
+  });
+});
+
 module.exports = {
+  getDashboardOverview,
   listProjects,
+  createProject,
   createTask,
   getTasksByProject,
+  listProjectAssignees,
   updateTask,
   deleteTask,
+  listTaskComments,
+  createTaskComment,
+  listTeams,
+  listWorkspaceTeams,
+  listWorkspaceMembers,
+  createTeam,
+  updateTeam,
+  listMembersForTeam,
+  addMemberToTeam,
+  removeMemberFromTeam,
+  linkProjectTeam,
 };

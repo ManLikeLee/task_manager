@@ -6,6 +6,7 @@ const projectWithWorkspaceSelect = {
   description: true,
   status: true,
   workspaceId: true,
+  teamId: true,
   createdAt: true,
   updatedAt: true,
   workspace: {
@@ -14,6 +15,12 @@ const projectWithWorkspaceSelect = {
       name: true,
       slug: true,
       ownerId: true,
+    },
+  },
+  team: {
+    select: {
+      id: true,
+      name: true,
     },
   },
 };

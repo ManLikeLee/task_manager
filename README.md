@@ -1,18 +1,47 @@
-# Task Manager Backend
+# Task Manager Platform
 
-Express + Prisma backend for task/workspace management.
+Express + Prisma backend with a modern React + TypeScript frontend in [`client/`](client).
 
 ## Quick Start
 
-1. Install dependencies:
+1. Install root dependencies:
    - `npm install`
-2. Configure environment:
+2. Install frontend dependencies:
+   - `npm --prefix client install`
+3. Configure backend environment:
    - `cp .env.example .env`
-3. Generate Prisma client / run migrations:
+4. Configure frontend environment:
+   - `cp client/.env.example client/.env`
+5. Generate Prisma client / run migrations:
    - `npm run prisma:generate`
    - `npm run prisma:migrate`
-4. Start dev server:
-   - `npm run dev`
+6. Start backend API:
+   - `PORT=5050 npm run dev:api`
+7. Start frontend app:
+   - `npm run dev:client`
+8. Open:
+   - `http://localhost:3000`
+
+## Frontend Stack
+
+The new client uses:
+
+- React + TypeScript + Vite
+- Tailwind CSS
+- React Router
+- TanStack Query
+- dnd-kit
+- Zustand
+
+Primary UI surfaces:
+
+- Auth screen (login/register)
+- App shell with sidebar + topbar + theme toggle
+- Kanban board (`TODO`, `IN_PROGRESS`, `IN_REVIEW`, `DONE`, `BLOCKED`)
+- Compact list view
+- Task detail drawer
+- Create task modal
+- Backend-driven filters/sorting
 
 ## Environment Variables
 
@@ -106,6 +135,13 @@ Integration tests are protected by a DB safety guard:
 - Set `TEST_DATABASE_URL` (or `DATABASE_URL`) to a dedicated test DB URL containing `test`.
 
 ## Deprecation and Migration Notes
+
+Frontend migration:
+
+- The legacy static frontend under `public/` is now deprecated.
+- The intended UI is the Vite client in `client/`.
+- Keep `public/` only as temporary backward compatibility while teams migrate.
+- See [docs/frontend-migration.md](docs/frontend-migration.md) for a short migration summary.
 
 Task list endpoint migration:
 

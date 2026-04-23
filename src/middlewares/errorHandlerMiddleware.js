@@ -2,13 +2,24 @@ const logger = require("../utils/logger");
 const { sendError } = require("../utils/errorResponse");
 
 const errorHandlerMiddleware = (err, req, res, _next) => {
+  const isDevelopment = process.env.NODE_ENV !== "production";
+
+  const requestPayloadContext = isDevelopment
+    ? {
+        body: req.body,
+        params: req.params,
+        query: req.query,
+      }
+    : undefined;
+
   logger.error(err.message || "Unhandled error.", {
     requestId: req.requestId,
     method: req.method,
     path: req.originalUrl,
     statusCode: err.statusCode || 500,
     code: err.code,
-    stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+    stack: isDevelopment ? err.stack : undefined,
+    ...(requestPayloadContext ? { request: requestPayloadContext } : {}),
   });
 
   if (err.code === "P2025") {
@@ -30,9 +41,21 @@ const errorHandlerMiddleware = (err, req, res, _next) => {
   }
 
   if (err.name === "PrismaClientValidationError") {
+    if (isDevelopment) {
+      logger.error("prisma.validation_error.details", {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.originalUrl,
+        message: err.message,
+        request: requestPayloadContext,
+      });
+    }
+
     return sendError(res, {
       statusCode: 400,
-      message: "Invalid database operation.",
+      message: isDevelopment
+        ? "Invalid database operation. Check server logs for Prisma validation details."
+        : "Invalid database operation.",
       code: "INVALID_DATABASE_OPERATION",
       requestId: req.requestId,
     });

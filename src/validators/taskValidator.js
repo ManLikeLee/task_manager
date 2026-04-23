@@ -33,6 +33,12 @@ const baseTaskFields = {
     .uuid(cuidOrUuidMessage)
     .optional()
     .nullable(),
+  assigneeName: z
+    .string()
+    .trim()
+    .max(120, "Assignee name must be 120 characters or fewer.")
+    .optional()
+    .nullable(),
 };
 
 const createTaskSchema = z.object({
@@ -49,6 +55,9 @@ const updateTaskSchema = z
     dueDate: z.coerce.date().optional().nullable(),
     assigneeId: z
       .union([z.string().trim().uuid(cuidOrUuidMessage), z.null()])
+      .optional(),
+    assigneeName: z
+      .union([z.string().trim().max(120), z.null()])
       .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -96,10 +105,19 @@ const taskListQuerySchema = z
     },
   );
 
+const createTaskCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, "Comment body is required.")
+    .max(2000, "Comment must be 2000 characters or fewer."),
+});
+
 module.exports = {
   createTaskSchema,
   updateTaskSchema,
   taskProjectParamsSchema,
   taskIdParamsSchema,
   taskListQuerySchema,
+  createTaskCommentSchema,
 };

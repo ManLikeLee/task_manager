@@ -10,29 +10,42 @@ const createWorkspace = (data) =>
   });
 
 const listWorkspaces = (options = {}) =>
-  prisma.workspace.findMany({
-    include: {
-      owner: true,
-      members: true,
-      projects: true,
-    },
-    ...options,
-  });
+  prisma.workspace.findMany(
+    options.select || options.include
+      ? {
+          ...options,
+        }
+      : {
+          include: {
+            owner: true,
+            members: true,
+            projects: true,
+          },
+          ...options,
+        },
+  );
 
 const getWorkspaceById = (id, options = {}) =>
-  prisma.workspace.findUnique({
-    where: { id },
-    include: {
-      owner: true,
-      members: {
-        include: {
-          user: true,
+  prisma.workspace.findUnique(
+    options.select || options.include
+      ? {
+          where: { id },
+          ...options,
+        }
+      : {
+          where: { id },
+          include: {
+            owner: true,
+            members: {
+              include: {
+                user: true,
+              },
+            },
+            projects: true,
+          },
+          ...options,
         },
-      },
-      projects: true,
-    },
-    ...options,
-  });
+  );
 
 const updateWorkspace = (id, data) =>
   prisma.workspace.update({

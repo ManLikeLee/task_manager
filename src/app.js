@@ -13,35 +13,47 @@ const notFoundMiddleware = require("./middlewares/notFoundMiddleware");
 const errorHandlerMiddleware = require("./middlewares/errorHandlerMiddleware");
 
 const app = express();
-const allowedOrigin = process.env.CLIENT_URL;
+const allowedOriginConfig = process.env.CLIENT_URL || "";
+const isDevelopment = (process.env.NODE_ENV || "development") !== "production";
 
-const buildAllowedOrigins = (origin) => {
+const parseAllowedOrigins = (originsConfig) =>
+  originsConfig
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const buildAllowedOrigins = (originsList) => {
   const origins = new Set();
 
-  if (!origin) {
+  if (!originsList.length) {
     return origins;
   }
 
-  origins.add(origin);
+  originsList.forEach((origin) => {
+    origins.add(origin);
 
-  try {
-    const parsed = new URL(origin);
-    const isLocalHost =
-      parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+    try {
+      const parsed = new URL(origin);
+      const isLocalHost =
+        parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
 
-    if (isLocalHost) {
-      const alternateHost =
-        parsed.hostname === "localhost" ? "127.0.0.1" : "localhost";
-      origins.add(`${parsed.protocol}//${alternateHost}${parsed.port ? `:${parsed.port}` : ""}`);
+      if (isLocalHost) {
+        const alternateHost =
+          parsed.hostname === "localhost" ? "127.0.0.1" : "localhost";
+        origins.add(`${parsed.protocol}//${alternateHost}${parsed.port ? `:${parsed.port}` : ""}`);
+      }
+    } catch {
+      // Ignore invalid CLIENT_URL format and keep the original value only.
     }
-  } catch {
-    // Ignore invalid CLIENT_URL format and keep the original value only.
-  }
+  });
 
   return origins;
 };
 
-const allowedOrigins = buildAllowedOrigins(allowedOrigin);
+const configuredOrigins = parseAllowedOrigins(allowedOriginConfig);
+const allowedOrigins = buildAllowedOrigins(configuredOrigins);
+const isLocalDevOrigin = (origin) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
 app.disable("x-powered-by");
 app.use(
@@ -53,7 +65,11 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || !allowedOrigin || allowedOrigins.has(origin)) {
+      if (!origin || !configuredOrigins.length || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      if (isDevelopment && isLocalDevOrigin(origin)) {
         return callback(null, true);
       }
 

@@ -16,6 +16,7 @@ const taskDetailSelect = {
   priority: true,
   dueDate: true,
   assigneeId: true,
+  assigneeName: true,
   creatorId: true,
   projectId: true,
   createdAt: true,
@@ -39,6 +40,11 @@ const taskDetailSelect = {
           ownerId: true,
         },
       },
+    },
+  },
+  _count: {
+    select: {
+      comments: true,
     },
   },
 };
