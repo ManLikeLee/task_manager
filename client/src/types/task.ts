@@ -29,11 +29,13 @@ export type Task = {
   assignee: {
     id: string
     name: string
+    username?: string
     email: string
   } | null
   creator?: {
     id: string
     name: string
+    username?: string
     email: string
   } | null
   project?: {
@@ -59,6 +61,7 @@ export type TaskComment = {
   author: {
     id: string
     name: string
+    username?: string
     email: string
   }
 }
@@ -91,5 +94,6 @@ export type UpdateTaskPayload = Partial<Omit<CreateTaskPayload, 'projectId'>>
 export type TaskAssigneeOption = {
   id: string
   name: string
+  username?: string
   email: string
 }

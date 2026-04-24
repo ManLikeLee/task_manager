@@ -13,7 +13,22 @@ type RequestOptions = {
 
 const parseResponse = async <T>(response: Response): Promise<T> => {
   const text = await response.text()
-  const parsed = text ? (JSON.parse(text) as ApiSuccess<T> | ApiErrorPayload) : null
+  let parsed: ApiSuccess<T> | ApiErrorPayload | null = null
+
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as ApiSuccess<T> | ApiErrorPayload
+    } catch {
+      throw new ApiError(
+        response.ok
+          ? 'Server returned a non-JSON response.'
+          : (text.includes('<!DOCTYPE') || text.includes('<html')
+              ? 'API is unreachable or misconfigured. Please ensure backend server is running.'
+              : `Request failed with status ${response.status}`),
+        response.status,
+      )
+    }
+  }
 
   if (!response.ok) {
     const errorPayload = parsed as ApiErrorPayload | null

@@ -43,12 +43,15 @@ enum TeamMemberRole {
 model User {
   id               String            @id @default(uuid())
   name             String
+  username         String            @unique
   email            String            @unique
   passwordHash     String
   refreshTokenHash String?
   ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
   workspaceMembers WorkspaceMember[]
   teamMemberships  TeamMember[]
+  createdTeams     Team[]            @relation("TeamCreator")
+  createdInvites   WorkspaceInvite[] @relation("WorkspaceInviteCreator")
   assignedTasks    Task[]            @relation("TaskAssignee")
   createdTasks     Task[]            @relation("TaskCreator")
   taskComments     TaskComment[]     @relation("TaskCommentAuthor")
@@ -60,12 +63,14 @@ model Workspace {
   id          String            @id @default(uuid())
   name        String
   slug        String            @unique
+  joinCode    String?           @unique
   description String?
   ownerId     String
   owner       User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members     WorkspaceMember[]
   teams       Team[]
   projects    Project[]
+  invites     WorkspaceInvite[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 }
@@ -127,15 +132,18 @@ model Task {
 model Team {
   id          String       @id @default(uuid())
   workspaceId String
+  createdById String
   name        String
   description String?
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User         @relation("TeamCreator", fields: [createdById], references: [id], onDelete: Restrict)
   members     TeamMember[]
   projects    Project[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
   @@index([workspaceId])
+  @@index([createdById])
   @@unique([workspaceId, name])
 }
 
@@ -166,4 +174,21 @@ model TaskComment {
 
   @@index([taskId, createdAt])
   @@index([authorId])
+}
+
+model WorkspaceInvite {
+  id           String        @id @default(uuid())
+  workspaceId  String
+  code         String        @unique
+  createdById  String
+  roleToAssign WorkspaceRole @default(MEMBER)
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User          @relation("WorkspaceInviteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([workspaceId])
+  @@index([code])
 }

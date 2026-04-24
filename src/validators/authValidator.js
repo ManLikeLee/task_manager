@@ -6,6 +6,16 @@ const registerSchema = z.object({
     .trim()
     .min(2, "Name must be at least 2 characters long.")
     .max(100, "Name must be 100 characters or fewer."),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3, "Username must be at least 3 characters long.")
+    .max(30, "Username must be 30 characters or fewer.")
+    .regex(
+      /^[a-z0-9_-]+$/,
+      "Username can only contain lowercase letters, numbers, underscores, and hyphens.",
+    ),
   email: z
     .string()
     .trim()

@@ -1,18 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
 export const CreateProjectModal = ({
   open,
   onClose,
   onCreate,
+  workspaces = [],
+  teams = [],
+  defaultWorkspaceId = '',
 }: {
   open: boolean
   onClose: () => void
-  onCreate: (payload: { name: string; description: string | null }) => Promise<void>
+  onCreate: (payload: { name: string; description: string | null; workspaceId?: string; teamId?: string | null }) => Promise<void>
+  workspaces?: Array<{ id: string; name: string }>
+  teams?: Array<{ id: string; name: string; workspaceId: string }>
+  defaultWorkspaceId?: string
 }) => {
-  const [form, setForm] = useState({ name: '', description: '' })
+  const [form, setForm] = useState({ name: '', description: '', workspaceId: defaultWorkspaceId, teamId: '' })
   const [loading, setLoading] = useState(false)
   const [fieldError, setFieldError] = useState('')
+
+  const filteredTeams = teams.filter((team) => team.workspaceId === form.workspaceId)
+
+  useEffect(() => {
+    if (!open) return
+    setForm((current) => ({ ...current, workspaceId: current.workspaceId || defaultWorkspaceId }))
+  }, [defaultWorkspaceId, open])
 
   if (!open) return null
 
@@ -44,8 +57,10 @@ export const CreateProjectModal = ({
               await onCreate({
                 name: form.name.trim(),
                 description: form.description.trim() || null,
+                workspaceId: form.workspaceId || undefined,
+                teamId: form.teamId || null,
               })
-              setForm({ name: '', description: '' })
+              setForm({ name: '', description: '', workspaceId: defaultWorkspaceId, teamId: '' })
               onClose()
             } finally {
               setLoading(false)
@@ -63,6 +78,45 @@ export const CreateProjectModal = ({
             />
             {fieldError ? <p className="text-xs" style={{ color: 'var(--tf-rose)' }}>{fieldError}</p> : null}
           </label>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="block space-y-1.5">
+              <span className="text-[11px] uppercase tracking-[0.08em]" style={{ color: 'var(--tf-text-3)' }}>
+                Workspace
+              </span>
+              <select
+                className="tf-input"
+                value={form.workspaceId}
+                onChange={(event) => setForm((state) => ({ ...state, workspaceId: event.target.value, teamId: '' }))}
+              >
+                <option value="">Select workspace</option>
+                {workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-[11px] uppercase tracking-[0.08em]" style={{ color: 'var(--tf-text-3)' }}>
+                Team (optional)
+              </span>
+              <select
+                className="tf-input"
+                value={form.teamId}
+                onChange={(event) => setForm((state) => ({ ...state, teamId: event.target.value }))}
+                disabled={!form.workspaceId}
+              >
+                <option value="">No team</option>
+                {filteredTeams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <label className="block space-y-1.5">
             <span className="text-[11px] uppercase tracking-[0.08em]" style={{ color: 'var(--tf-text-3)' }}>

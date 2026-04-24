@@ -50,8 +50,6 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase()
 
-const normalizeName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ')
-
 export const TaskDetailDrawer = ({
   task,
   open,
@@ -96,11 +94,11 @@ export const TaskDetailDrawer = ({
   useEffect(() => {
     setTitleDraft(task?.title || '')
     setDescriptionDraft(task?.description || '')
-    setAssigneeDraft(task?.assignee?.name || task?.assigneeName || '')
+    setAssigneeDraft(task?.assignee?.username ? `@${task.assignee.username}` : task?.assigneeName || '')
     setCommentDraft('')
     setIsEditingTitle(false)
     setIsEditingDescription(false)
-  }, [task?.id, task?.title, task?.description, task?.assignee?.name, task?.assigneeName])
+  }, [task?.id, task?.title, task?.description, task?.assignee?.username, task?.assigneeName])
 
   useEffect(() => {
     if (!open) return
@@ -166,23 +164,19 @@ export const TaskDetailDrawer = ({
       return
     }
 
-    const normalized = normalizeName(trimmed)
-    const exactMatch = assignableUsers.find((option) => normalizeName(option.name) === normalized)
-    const partialMatch =
-      exactMatch ||
-      assignableUsers.find((option) => normalizeName(option.name).startsWith(normalized)) ||
-      assignableUsers.find((option) => normalizeName(option.name).includes(normalized))
+    const normalizedUsername = trimmed.replace(/^@/, '').trim().toLowerCase()
+    const usernameMatch = assignableUsers.find((option) => option.username?.toLowerCase() === normalizedUsername)
 
-    if (!partialMatch) {
+    if (!usernameMatch) {
       await onSave({ assigneeId: null, assigneeName: trimmed })
       setAssigneeDraft(trimmed)
       return
     }
 
-    if (partialMatch.id !== task.assigneeId || task.assigneeName !== partialMatch.name) {
-      await onSave({ assigneeId: partialMatch.id, assigneeName: partialMatch.name })
+    if (usernameMatch.id !== task.assigneeId || task.assigneeName !== null) {
+      await onSave({ assigneeId: usernameMatch.id, assigneeName: null })
     }
-    setAssigneeDraft(partialMatch.name)
+    setAssigneeDraft(`@${usernameMatch.username || normalizedUsername}`)
   }
 
   const submitComment = async () => {
@@ -311,14 +305,16 @@ export const TaskDetailDrawer = ({
                       void saveAssignee()
                     }
                     if (event.key === 'Escape') {
-                      setAssigneeDraft(task.assignee?.name || '')
+                      setAssigneeDraft(task.assignee?.username ? `@${task.assignee.username}` : task.assigneeName || '')
                     }
                   }}
                 />
                 <datalist id={`assignee-options-${task.id}`}>
-                  {assignableUsers.map((user) => (
-                    <option key={user.id} value={user.name} />
-                  ))}
+                  {assignableUsers
+                    .filter((user) => Boolean(user.username))
+                    .map((user) => (
+                      <option key={user.id} value={`@${user.username}`} />
+                    ))}
                 </datalist>
               </div>
             </div>

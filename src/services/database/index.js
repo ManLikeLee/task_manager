@@ -6,6 +6,7 @@ const taskDbService = require("./taskDbService");
 const taskCommentDbService = require("./taskCommentDbService");
 const teamDbService = require("./teamDbService");
 const teamMemberDbService = require("./teamMemberDbService");
+const workspaceInviteDbService = require("./workspaceInviteDbService");
 
 module.exports = {
   users: userDbService,
@@ -16,4 +17,5 @@ module.exports = {
   taskComments: taskCommentDbService,
   teams: teamDbService,
   teamMembers: teamMemberDbService,
+  workspaceInvites: workspaceInviteDbService,
 };

@@ -38,6 +38,7 @@ export const CreateTaskModal = ({
   assignees?: TaskAssigneeOption[]
   loadingAssignees?: boolean
 }) => {
+  const normalizeUsername = (value: string) => value.trim().toLowerCase().replace(/^@/, '')
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -90,9 +91,11 @@ export const CreateTaskModal = ({
             setLoading(true)
             try {
               const typedAssignee = form.assigneeName.trim()
-              const matchedAssignee = typedAssignee
-                ? assignees.find((assignee) => assignee.name.toLowerCase() === typedAssignee.toLowerCase())
-                : null
+              const targetUsername = normalizeUsername(typedAssignee)
+              const matchedAssignee =
+                targetUsername
+                  ? assignees.find((assignee) => assignee.username?.toLowerCase() === targetUsername)
+                  : null
               await onCreate({
                 title: form.title.trim(),
                 description: form.description.trim() || null,
@@ -100,7 +103,7 @@ export const CreateTaskModal = ({
                 priority: form.priority,
                 dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : null,
                 assigneeId: matchedAssignee?.id || null,
-                assigneeName: typedAssignee || null,
+                assigneeName: matchedAssignee ? null : typedAssignee || null,
               })
               setForm({
                 title: '',
@@ -205,12 +208,14 @@ export const CreateTaskModal = ({
                 onChange={(event) => setForm((state) => ({ ...state, assigneeName: event.target.value }))}
                 className="tf-input"
                 list="create-task-assignees"
-                placeholder={loadingAssignees ? 'Loading…' : 'Unassigned'}
+                placeholder={loadingAssignees ? 'Loading…' : '@username or manual name'}
               />
               <datalist id="create-task-assignees">
-                {assignees.map((assignee) => (
-                  <option key={assignee.id} value={assignee.name} />
-                ))}
+                {assignees
+                  .filter((assignee) => Boolean(assignee.username))
+                  .map((assignee) => (
+                    <option key={assignee.id} value={`@${assignee.username}`} />
+                  ))}
               </datalist>
             </label>
           </div>

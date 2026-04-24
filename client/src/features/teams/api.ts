@@ -1,7 +1,10 @@
 import { apiRequest } from '@/lib/api'
 import type { Team, TeamMember } from '@/types/team'
 
-export const listTeams = () => apiRequest<{ teams: Team[] }>('/api/teams')
+export const listTeams = (workspaceId?: string) => {
+  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+  return apiRequest<{ teams: Team[] }>(`/api/teams${query}`)
+}
 
 export const createTeam = (workspaceId: string, payload: { name: string; description?: string | null }) =>
   apiRequest<{ team: Team }>(`/api/workspaces/${workspaceId}/teams`, {
@@ -21,14 +24,14 @@ export const updateTeam = (teamId: string, payload: { name?: string; description
 export const listTeamMembers = (teamId: string) =>
   apiRequest<{ members: TeamMember[] }>(`/api/teams/${teamId}/members`)
 
-export const addTeamMember = (teamId: string, payload: { userId: string; role?: 'LEAD' | 'MEMBER' }) =>
+export const addTeamMemberByUsername = (teamId: string, payload: { username: string; role?: 'LEAD' | 'MEMBER' }) =>
   apiRequest<{ member: TeamMember }>(`/api/teams/${teamId}/members`, {
     method: 'POST',
     body: payload,
   })
 
-export const removeTeamMember = (teamId: string, memberId: string) =>
-  apiRequest<void>(`/api/teams/${teamId}/members/${memberId}`, {
+export const removeTeamMember = (teamId: string, userId: string) =>
+  apiRequest<void>(`/api/teams/${teamId}/members/${userId}`, {
     method: 'DELETE',
   })
 

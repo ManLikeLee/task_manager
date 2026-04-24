@@ -29,7 +29,10 @@ export const TaskCard = ({
   })
 
   const description = truncate(task.description || '', 92)
-  const assigneeDisplayName = task.assignee?.name || task.assigneeName || 'Unassigned'
+  const assigneeDisplayName =
+    (task.assignee?.username ? `@${task.assignee.username}` : null) ||
+    task.assigneeName ||
+    'Unassigned'
   const assigneeInitials = assigneeDisplayName
     ? assigneeDisplayName
         .split(' ')

@@ -1,34 +1,32 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Users, X } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { useProjects } from '@/features/projects/hooks'
-import { useAddTeamMember, useCreateTeam, useLinkProjectTeam, useRemoveTeamMember, useTeamMembers, useTeams, useWorkspaceMembers } from '@/features/teams/hooks'
+import { useAddTeamMember, useCreateTeam, useLinkProjectTeam, useRemoveTeamMember, useTeamMembers, useTeams } from '@/features/teams/hooks'
+import { useTaskUiStore } from '@/features/tasks/store'
+import { useWorkspaces } from '@/features/workspaces/hooks'
 
 export const TeamsPage = () => {
   const { notify } = useToast()
-  const teams = useTeams()
-  const projects = useProjects()
+  const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
+  const teams = useTeams(activeWorkspaceId || undefined)
+  const projects = useProjects(activeWorkspaceId || undefined)
+  const workspaces = useWorkspaces()
   const createTeam = useCreateTeam()
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', description: '' })
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
-  const [memberUserId, setMemberUserId] = useState('')
+  const [memberUsername, setMemberUsername] = useState('')
 
-  const fallbackWorkspaceId = projects.data?.[0]?.workspace.id || ''
+  const fallbackWorkspaceId = activeWorkspaceId || projects.data?.[0]?.workspace.id || workspaces.data?.[0]?.id || ''
   const selectedTeam = teams.data?.find((team) => team.id === selectedTeamId) || teams.data?.[0] || null
   const workspaceId = selectedTeam?.workspaceId || fallbackWorkspaceId
   const teamMembers = useTeamMembers(selectedTeam?.id || '')
-  const workspaceMembers = useWorkspaceMembers(workspaceId)
   const addMember = useAddTeamMember(selectedTeam?.id || '')
   const removeMember = useRemoveTeamMember(selectedTeam?.id || '')
   const linkProjectTeam = useLinkProjectTeam()
   const [projectToLink, setProjectToLink] = useState('')
-
-  const availableWorkspaceMembers = useMemo(() => {
-    const alreadyInTeam = new Set((teamMembers.data || []).map((member) => member.userId))
-    return (workspaceMembers.data || []).filter((member) => !alreadyInTeam.has(member.id))
-  }, [teamMembers.data, workspaceMembers.data])
 
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-7">
@@ -105,7 +103,7 @@ export const TeamsPage = () => {
                         {member.user.name}
                       </p>
                       <p className="truncate text-[11px]" style={{ color: 'var(--tf-text-3)' }}>
-                        {member.user.email} · {member.role.toLowerCase()}
+                        @{member.user.username} · {member.role.toLowerCase()}
                       </p>
                     </div>
                     <button
@@ -114,7 +112,7 @@ export const TeamsPage = () => {
                       style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-text-3)' }}
                       onClick={async () => {
                         try {
-                          await removeMember.mutateAsync(member.id)
+                          await removeMember.mutateAsync(member.userId)
                         } catch (error) {
                           notify(error instanceof Error ? error.message : 'Failed to remove member.', 'error')
                         }
@@ -132,26 +130,20 @@ export const TeamsPage = () => {
               </div>
 
               <div className="mt-3 flex gap-2">
-                <select
+                <input
                   className="tf-input flex-1"
-                  value={memberUserId}
-                  onChange={(event) => setMemberUserId(event.target.value)}
-                >
-                  <option value="">Add workspace member…</option>
-                  {availableWorkspaceMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name}
-                    </option>
-                  ))}
-                </select>
+                  value={memberUsername}
+                  onChange={(event) => setMemberUsername(event.target.value)}
+                  placeholder="Add by username (e.g. jordan_hayes)"
+                />
                 <button
                   type="button"
                   className="tf-secondary-btn"
                   onClick={async () => {
-                    if (!memberUserId || !selectedTeam?.id) return
+                    if (!memberUsername.trim() || !selectedTeam?.id) return
                     try {
-                      await addMember.mutateAsync({ userId: memberUserId, role: 'MEMBER' })
-                      setMemberUserId('')
+                      await addMember.mutateAsync({ username: memberUsername.trim().toLowerCase(), role: 'MEMBER' })
+                      setMemberUsername('')
                     } catch (error) {
                       notify(error instanceof Error ? error.message : 'Failed to add member.', 'error')
                     }
@@ -211,7 +203,7 @@ export const TeamsPage = () => {
               onSubmit={async (event) => {
                 event.preventDefault()
                 if (!workspaceId) {
-                  notify('Create a project/workspace first.', 'error')
+                  notify('Create or join a workspace first.', 'error')
                   return
                 }
                 try {

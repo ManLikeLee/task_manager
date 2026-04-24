@@ -47,6 +47,28 @@ const getWorkspaceById = (id, options = {}) =>
         },
   );
 
+const getWorkspaceByJoinCode = (joinCode, options = {}) =>
+  prisma.workspace.findUnique(
+    options.select || options.include
+      ? {
+          where: { joinCode },
+          ...options,
+        }
+      : {
+          where: { joinCode },
+          include: {
+            owner: true,
+            members: {
+              include: {
+                user: true,
+              },
+            },
+            projects: true,
+          },
+          ...options,
+        },
+  );
+
 const updateWorkspace = (id, data) =>
   prisma.workspace.update({
     where: { id },
@@ -62,6 +84,7 @@ module.exports = {
   createWorkspace,
   listWorkspaces,
   getWorkspaceById,
+  getWorkspaceByJoinCode,
   updateWorkspace,
   deleteWorkspace,
 };

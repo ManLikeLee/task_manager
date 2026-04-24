@@ -16,6 +16,11 @@ const addDeprecatedTaskListWarning = (_req, res, next) => {
 };
 
 router.get("/dashboard/overview", taskController.getDashboardOverview);
+router.get("/workspaces", taskController.listWorkspaces);
+router.post("/workspaces", taskController.createWorkspace);
+router.post("/workspaces/join", taskController.joinWorkspace);
+router.post("/workspaces/:workspaceId/invites", taskController.createInviteForWorkspace);
+router.get("/workspaces/:workspaceId/invites", taskController.listInvitesForWorkspace);
 router.get("/projects", taskController.listProjects);
 router.post("/projects", taskController.createProject);
 router.patch("/projects/:projectId/team", taskController.linkProjectTeam);
@@ -29,7 +34,7 @@ router.post("/workspaces/:workspaceId/teams", taskController.createTeam);
 router.patch("/teams/:teamId", taskController.updateTeam);
 router.get("/teams/:teamId/members", taskController.listMembersForTeam);
 router.post("/teams/:teamId/members", taskController.addMemberToTeam);
-router.delete("/teams/:teamId/members/:memberId", taskController.removeMemberFromTeam);
+router.delete("/teams/:teamId/members/:userId", taskController.removeMemberFromTeam);
 // Backward-compatible route. Remove once clients are migrated.
 router.get(
   "/tasks/:projectId",

@@ -3,12 +3,13 @@ import * as api from '@/features/projects/api'
 
 export const projectKeys = {
   all: ['projects'] as const,
+  byWorkspace: (workspaceId: string) => ['projects', workspaceId] as const,
 }
 
-export const useProjects = () =>
+export const useProjects = (workspaceId?: string) =>
   useQuery({
-    queryKey: projectKeys.all,
-    queryFn: api.listProjects,
+    queryKey: workspaceId ? projectKeys.byWorkspace(workspaceId) : projectKeys.all,
+    queryFn: () => api.listProjects(workspaceId),
     select: (data) => data.projects,
   })
 

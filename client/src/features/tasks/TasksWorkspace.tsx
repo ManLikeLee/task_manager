@@ -8,6 +8,8 @@ import { CreateProjectModal } from '@/features/projects/CreateProjectModal'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { useCreateProject, useProjects } from '@/features/projects/hooks'
 import { TeamsPage } from '@/features/teams/TeamsPage'
+import { SettingsPage } from '@/features/settings/SettingsPage'
+import { useTeams } from '@/features/teams/hooks'
 import { CreateTaskModal } from '@/features/tasks/components/CreateTaskModal'
 import { LoadingBoardSkeleton } from '@/features/tasks/components/LoadingBoardSkeleton'
 import { TaskBoard } from '@/features/tasks/components/TaskBoard'
@@ -16,6 +18,7 @@ import { useCreateTask, useDeleteTask, useProjectAssignees, useTasks, useUpdateT
 import { useTaskUiStore } from '@/features/tasks/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import type { TaskFilters as TaskFilterType, TaskPriority, TaskStatus } from '@/types/task'
+import { useWorkspaces } from '@/features/workspaces/hooks'
 
 const VIEW_TABS = [
   { value: 'all', label: 'All tasks' },
@@ -30,8 +33,12 @@ export const TasksWorkspace = () => {
   const navigate = useNavigate()
   const { notify } = useToast()
   const user = useAuthStore((state) => state.user)
-  const projects = useProjects()
+  const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
+  const projects = useProjects(activeWorkspaceId || undefined)
+  const workspaces = useWorkspaces(Boolean(user))
+  const teams = useTeams(activeWorkspaceId || undefined)
   const {
+    setActiveWorkspaceId,
     selectedProjectId,
     selectedTaskId,
     search,
@@ -246,6 +253,8 @@ export const TasksWorkspace = () => {
         </>
       ) : boardView === 'teams' ? (
         <TeamsPage />
+      ) : boardView === 'settings' ? (
+        <SettingsPage />
       ) : (
         <ProjectsPage />
       )}
@@ -277,9 +286,13 @@ export const TasksWorkspace = () => {
       <CreateProjectModal
         open={createProjectOpen}
         onClose={() => setCreateProjectOpen(false)}
+        workspaces={(workspaces.data || []).map((workspace) => ({ id: workspace.id, name: workspace.name }))}
+        teams={(teams.data || []).map((team) => ({ id: team.id, name: team.name, workspaceId: team.workspaceId }))}
+        defaultWorkspaceId={activeWorkspaceId || workspaces.data?.[0]?.id || ''}
         onCreate={async (payload) => {
           try {
             const response = await createProject.mutateAsync(payload)
+            setActiveWorkspaceId(response.project.workspace.id)
             useTaskUiStore.getState().setSelectedProjectId(response.project.id)
             setBoardView('board')
             navigate(`/projects/${response.project.id}`)

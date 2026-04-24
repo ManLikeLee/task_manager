@@ -1,6 +1,7 @@
 export type User = {
   id: string
   name: string
+  username: string
   email: string
   createdAt: string
   updatedAt: string
@@ -13,6 +14,7 @@ export type LoginPayload = {
 
 export type RegisterPayload = {
   name: string
+  username: string
   email: string
   password: string
 }

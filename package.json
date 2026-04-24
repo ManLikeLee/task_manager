@@ -12,6 +12,7 @@
     "prisma:generate": "bash ./scripts/ensure-postgres.sh && prisma generate",
     "prisma:migrate": "bash ./scripts/ensure-postgres.sh && prisma migrate dev",
     "prisma:validate": "bash ./scripts/ensure-postgres.sh && prisma validate",
+    "backfill:workspace-codes": "node scripts/backfillWorkspaceJoinCodes.js",
     "start": "node server.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "NODE_ENV=test jest --config tests/jest.unit.config.cjs",

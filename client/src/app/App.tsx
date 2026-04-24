@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthPage } from '@/features/auth/AuthPage'
 import { useAuthBootstrap } from '@/features/auth/hooks'
 import { useAuthStore } from '@/features/auth/store'
+import { OnboardingPage } from '@/features/workspaces/OnboardingPage'
+import { useWorkspaces } from '@/features/workspaces/hooks'
 import { AppShell } from '@/layouts/AppShell'
 
 const FullscreenLoader = () => (
@@ -15,8 +17,10 @@ const FullscreenLoader = () => (
 export const App = () => {
   const { hydrated, loading } = useAuthBootstrap()
   const user = useAuthStore((state) => state.user)
+  const workspaces = useWorkspaces(Boolean(user))
+  const needsOnboarding = Boolean(user) && !workspaces.isLoading && !workspaces.isError && (workspaces.data?.length || 0) === 0
 
-  if (!hydrated || loading) {
+  if (!hydrated || loading || (Boolean(user) && workspaces.isLoading)) {
     return <FullscreenLoader />
   }
 
@@ -29,7 +33,17 @@ export const App = () => {
         </>
       ) : (
         <>
-          <Route path="/*" element={<AppShell />} />
+          {needsOnboarding ? (
+            <>
+              <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="*" element={<Navigate to="/onboarding" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/*" element={<AppShell />} />
+              <Route path="/onboarding" element={<Navigate to="/" replace />} />
+            </>
+          )}
           <Route path="/auth" element={<Navigate to="/" replace />} />
         </>
       )}

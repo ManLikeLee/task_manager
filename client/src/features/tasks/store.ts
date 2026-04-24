@@ -2,9 +2,10 @@ import { create } from 'zustand'
 import type { SortField, SortOrder, TaskPriority, TaskStatus } from '@/types/task'
 
 type TaskUiState = {
+  activeWorkspaceId: string
   selectedProjectId: string
   selectedTaskId: string | null
-  boardView: 'board' | 'projects' | 'teams'
+  boardView: 'board' | 'projects' | 'teams' | 'settings'
   search: string
   status: TaskStatus | ''
   priority: TaskPriority | ''
@@ -16,9 +17,10 @@ type TaskUiState = {
   createTaskOpen: boolean
   createProjectOpen: boolean
   mobileSidebarOpen: boolean
+  setActiveWorkspaceId: (id: string) => void
   setSelectedProjectId: (id: string) => void
   setSelectedTaskId: (id: string | null) => void
-  setBoardView: (view: 'board' | 'projects' | 'teams') => void
+  setBoardView: (view: 'board' | 'projects' | 'teams' | 'settings') => void
   setFilters: (payload: Partial<Pick<TaskUiState, 'search' | 'status' | 'priority' | 'dueAfter' | 'dueBefore'>>) => void
   setSort: (sortBy: SortField, sortOrder: SortOrder) => void
   setShowFilters: (open: boolean) => void
@@ -27,7 +29,13 @@ type TaskUiState = {
   setMobileSidebarOpen: (open: boolean) => void
 }
 
+const getInitialWorkspaceId = () => {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem('taskforce.activeWorkspaceId') || ''
+}
+
 export const useTaskUiStore = create<TaskUiState>((set) => ({
+  activeWorkspaceId: getInitialWorkspaceId(),
   selectedProjectId: '',
   selectedTaskId: null,
   boardView: 'board',
@@ -42,6 +50,16 @@ export const useTaskUiStore = create<TaskUiState>((set) => ({
   createTaskOpen: false,
   createProjectOpen: false,
   mobileSidebarOpen: false,
+  setActiveWorkspaceId: (activeWorkspaceId) => {
+    if (typeof window !== 'undefined') {
+      if (activeWorkspaceId) {
+        window.localStorage.setItem('taskforce.activeWorkspaceId', activeWorkspaceId)
+      } else {
+        window.localStorage.removeItem('taskforce.activeWorkspaceId')
+      }
+    }
+    set({ activeWorkspaceId })
+  },
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedTaskId: (selectedTaskId) => set({ selectedTaskId }),
   setBoardView: (boardView) => set({ boardView }),

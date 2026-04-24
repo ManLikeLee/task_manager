@@ -14,6 +14,7 @@ const projectWithWorkspaceSelect = {
       id: true,
       name: true,
       slug: true,
+      joinCode: true,
       ownerId: true,
     },
   },

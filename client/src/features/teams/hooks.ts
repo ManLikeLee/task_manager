@@ -3,14 +3,15 @@ import * as api from '@/features/teams/api'
 
 export const teamKeys = {
   all: ['teams'] as const,
+  byWorkspace: (workspaceId: string) => ['teams', workspaceId] as const,
   members: (teamId: string) => ['team-members', teamId] as const,
   workspaceMembers: (workspaceId: string) => ['workspace-members', workspaceId] as const,
 }
 
-export const useTeams = () =>
+export const useTeams = (workspaceId?: string) =>
   useQuery({
-    queryKey: teamKeys.all,
-    queryFn: api.listTeams,
+    queryKey: workspaceId ? teamKeys.byWorkspace(workspaceId) : teamKeys.all,
+    queryFn: () => api.listTeams(workspaceId),
     select: (data) => data.teams,
   })
 
@@ -46,7 +47,7 @@ export const useAddTeamMember = (teamId: string) => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: api.addTeamMember.bind(null, teamId),
+    mutationFn: api.addTeamMemberByUsername.bind(null, teamId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: teamKeys.members(teamId) })
       queryClient.invalidateQueries({ queryKey: teamKeys.all })
@@ -58,7 +59,7 @@ export const useRemoveTeamMember = (teamId: string) => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (memberId: string) => api.removeTeamMember(teamId, memberId),
+    mutationFn: (userId: string) => api.removeTeamMember(teamId, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: teamKeys.members(teamId) })
       queryClient.invalidateQueries({ queryKey: teamKeys.all })

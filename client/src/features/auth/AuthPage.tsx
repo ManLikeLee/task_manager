@@ -16,7 +16,7 @@ const authItems = [
 export const AuthPage = () => {
   const user = useAuthStore((state) => state.user)
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '' })
   const [fieldError, setFieldError] = useState('')
   const login = useLogin()
   const register = useRegister()
@@ -29,10 +29,21 @@ export const AuthPage = () => {
   const onSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault()
 
-    if (!form.email || !form.password || (mode === 'register' && !form.name)) {
+    if (!form.email || !form.password || (mode === 'register' && (!form.name || !form.username))) {
       setFieldError('Please complete all required fields.')
       notify('Please complete all required fields.', 'error')
       return
+    }
+
+    if (mode === 'register') {
+      const normalizedUsername = form.username.trim().toLowerCase()
+      const usernameRegex = /^[a-z0-9_-]{3,30}$/
+      if (!usernameRegex.test(normalizedUsername)) {
+        const message = 'Username must be 3-30 chars and contain only lowercase letters, numbers, _ or -.'
+        setFieldError(message)
+        notify(message, 'error')
+        return
+      }
     }
 
     setFieldError('')
@@ -44,6 +55,7 @@ export const AuthPage = () => {
       } else {
         await register.mutateAsync({
           name: form.name.trim(),
+          username: form.username.trim().toLowerCase(),
           email: form.email.trim(),
           password: form.password,
         })
@@ -78,10 +90,20 @@ export const AuthPage = () => {
 
           <form className="space-y-4" onSubmit={onSubmit}>
             {mode === 'register' ? (
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Name</label>
-                <Input value={form.name} onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))} />
-              </div>
+              <>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Name</label>
+                  <Input value={form.name} onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Username</label>
+                  <Input
+                    value={form.username}
+                    placeholder="e.g. jordan_hayes"
+                    onChange={(event) => setForm((state) => ({ ...state, username: event.target.value }))}
+                  />
+                </div>
+              </>
             ) : null}
             <div className="space-y-1">
               <label className="text-sm font-medium">Email</label>

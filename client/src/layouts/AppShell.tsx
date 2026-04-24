@@ -5,17 +5,43 @@ import { useTaskUiStore } from '@/features/tasks/store'
 import { Sidebar } from '@/layouts/Sidebar'
 import { Topbar } from '@/layouts/Topbar'
 import { TasksWorkspace } from '@/features/tasks/TasksWorkspace'
+import { useWorkspaces } from '@/features/workspaces/hooks'
 
 export const AppShell = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const projects = useProjects()
 
+  const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
+  const setActiveWorkspaceId = useTaskUiStore((state) => state.setActiveWorkspaceId)
+  const workspaces = useWorkspaces()
+  const projects = useProjects(activeWorkspaceId || undefined)
   const selectedProjectId = useTaskUiStore((state) => state.selectedProjectId)
   const boardView = useTaskUiStore((state) => state.boardView)
   const setSelectedProjectId = useTaskUiStore((state) => state.setSelectedProjectId)
   const setBoardView = useTaskUiStore((state) => state.setBoardView)
   const setSelectedTaskId = useTaskUiStore((state) => state.setSelectedTaskId)
+
+  useEffect(() => {
+    if (workspaces.isLoading) return
+    const items = workspaces.data || []
+    if (!items.length) {
+      if (activeWorkspaceId) setActiveWorkspaceId('')
+      return
+    }
+
+    if (!activeWorkspaceId || !items.some((workspace) => workspace.id === activeWorkspaceId)) {
+      setActiveWorkspaceId(items[0].id)
+      setSelectedProjectId('')
+      setSelectedTaskId(null)
+    }
+  }, [
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    setSelectedProjectId,
+    setSelectedTaskId,
+    workspaces.data,
+    workspaces.isLoading,
+  ])
 
   useEffect(() => {
     if (projects.isLoading) return
@@ -35,6 +61,12 @@ export const AppShell = () => {
 
     if (pathname === '/teams') {
       if (boardView !== 'teams') setBoardView('teams')
+      setSelectedTaskId(null)
+      return
+    }
+
+    if (pathname === '/settings') {
+      if (boardView !== 'settings') setBoardView('settings')
       setSelectedTaskId(null)
       return
     }
@@ -59,6 +91,10 @@ export const AppShell = () => {
         setSelectedProjectId(routeProjectId)
         setSelectedTaskId(null)
       }
+      const routeProject = availableProjects.find((project) => project.id === routeProjectId)
+      if (routeProject?.workspace.id && routeProject.workspace.id !== activeWorkspaceId) {
+        setActiveWorkspaceId(routeProject.workspace.id)
+      }
       return
     }
 
@@ -81,7 +117,9 @@ export const AppShell = () => {
     navigate,
     projects.data,
     projects.isLoading,
+    activeWorkspaceId,
     selectedProjectId,
+    setActiveWorkspaceId,
     setBoardView,
     setSelectedProjectId,
     setSelectedTaskId,

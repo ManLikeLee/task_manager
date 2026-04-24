@@ -12,14 +12,16 @@ const {
 const toSafeUser = (user) => ({
   id: user.id,
   name: user.name,
+  username: user.username,
   email: user.email,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
 
-const createUser = async ({ name, email, passwordHash }) =>
+const createUser = async ({ name, username, email, passwordHash }) =>
   userDbService.createUser({
     name,
+    username: username.toLowerCase(),
     email: email.toLowerCase(),
     passwordHash,
   });
@@ -49,9 +51,19 @@ const registerUser = async (payload) => {
     throw new AppError("User already exists with this email.", 409);
   }
 
+  const existingUsername = await userDbService.getUserByUsername(
+    payload.username.toLowerCase(),
+    { select: { id: true } },
+  );
+
+  if (existingUsername) {
+    throw new AppError("Username is already taken.", 409);
+  }
+
   const passwordHash = await bcrypt.hash(payload.password, 12);
   const user = await createUser({
     name: payload.name,
+    username: payload.username,
     email: payload.email,
     passwordHash,
   });

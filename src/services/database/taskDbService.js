@@ -3,6 +3,7 @@ const prisma = require("../../prisma/client");
 const safeUserSelect = {
   id: true,
   name: true,
+  username: true,
   email: true,
   createdAt: true,
   updatedAt: true,

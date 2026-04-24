@@ -3,6 +3,7 @@ const prisma = require("../../prisma/client");
 const teamDetailSelect = {
   id: true,
   workspaceId: true,
+  createdById: true,
   name: true,
   description: true,
   createdAt: true,
@@ -13,6 +14,14 @@ const teamDetailSelect = {
       name: true,
       slug: true,
       ownerId: true,
+    },
+  },
+  createdBy: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      email: true,
     },
   },
   _count: {
@@ -61,4 +70,3 @@ module.exports = {
   deleteTeam,
   teamDetailSelect,
 };
-

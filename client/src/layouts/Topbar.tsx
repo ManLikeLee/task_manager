@@ -1,9 +1,12 @@
 import { Filter, Menu, Plus, Search } from 'lucide-react'
 import { useProjects } from '@/features/projects/hooks'
 import { useTaskUiStore } from '@/features/tasks/store'
+import { useWorkspaces } from '@/features/workspaces/hooks'
 
 export const Topbar = () => {
-  const projects = useProjects()
+  const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
+  const projects = useProjects(activeWorkspaceId || undefined)
+  const workspaces = useWorkspaces()
 
   const search = useTaskUiStore((state) => state.search)
   const selectedProjectId = useTaskUiStore((state) => state.selectedProjectId)
@@ -15,8 +18,21 @@ export const Topbar = () => {
   const showFilters = useTaskUiStore((state) => state.showFilters)
   const setShowFilters = useTaskUiStore((state) => state.setShowFilters)
 
-  const selectedProjectName = projects.data?.find((project) => project.id === selectedProjectId)?.name || 'Task board'
-  const title = boardView === 'projects' ? 'Projects' : boardView === 'teams' ? 'Teams' : selectedProjectName
+  const selectedProject = projects.data?.find((project) => project.id === selectedProjectId) || null
+  const selectedProjectName = selectedProject?.name || 'Task board'
+  const activeWorkspaceName =
+    workspaces.data?.find((workspace) => workspace.id === activeWorkspaceId)?.name ||
+    selectedProject?.workspace?.name ||
+    workspaces.data?.[0]?.name ||
+    'Workspace'
+  const title =
+    boardView === 'projects'
+      ? 'Projects'
+      : boardView === 'teams'
+        ? 'Teams'
+        : boardView === 'settings'
+          ? 'Settings'
+          : selectedProjectName
   const canCreateTask = Boolean(projects.data?.length && selectedProjectId)
 
   return (
@@ -33,7 +49,7 @@ export const Topbar = () => {
         </button>
 
         <p className="topbar-title truncate">
-          {title} {boardView === 'board' ? <span className="topbar-subtitle">/ Sprint</span> : null}
+          {title} {boardView === 'board' ? <span className="topbar-subtitle">/ {activeWorkspaceName}</span> : null}
         </p>
 
         <div className="topbar-actions ml-auto flex items-center gap-2">
@@ -65,7 +81,7 @@ export const Topbar = () => {
             </button>
           ) : null}
 
-          {boardView !== 'teams' ? (
+          {boardView !== 'teams' && boardView !== 'settings' ? (
             <button
               type="button"
               className="add-btn"

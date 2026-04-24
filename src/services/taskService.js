@@ -5,6 +5,7 @@ const taskCommentDbService = require("./database/taskCommentDbService");
 const projectDbService = require("./database/projectDbService");
 const teamDbService = require("./database/teamDbService");
 const teamMemberDbService = require("./database/teamMemberDbService");
+const workspaceInviteDbService = require("./database/workspaceInviteDbService");
 const userDbService = require("./database/userDbService");
 const workspaceDbService = require("./database/workspaceDbService");
 const workspaceMemberDbService = require("./database/workspaceMemberDbService");
@@ -217,7 +218,7 @@ const resolveAssigneePayload = async (workspace, payload = {}) => {
     const assignee = await ensureAssigneeInWorkspace(workspace, payload.assigneeId);
     return {
       assigneeId: assignee?.id || payload.assigneeId,
-      assigneeName: assignee?.name || null,
+      assigneeName: null,
     };
   }
 
@@ -228,6 +229,24 @@ const resolveAssigneePayload = async (workspace, payload = {}) => {
         assigneeId: null,
         assigneeName: null,
       };
+    }
+
+    const normalizedUsername = normalizeUsername(typedName.replace(/^@/, ""));
+    if (normalizedUsername) {
+      const matchedUser = await userDbService.getUserByUsername(normalizedUsername, {
+        select: { id: true, name: true },
+      });
+      if (matchedUser) {
+        try {
+          await ensureAssigneeInWorkspace(workspace, matchedUser.id);
+          return {
+            assigneeId: matchedUser.id,
+            assigneeName: null,
+          };
+        } catch {
+          // Fall through to manual assignee for non-workspace users.
+        }
+      }
     }
 
     return {
@@ -312,6 +331,21 @@ const userAccessWhere = (userId) => ({
   ],
 });
 
+const workspaceAccessWhere = (userId) => ({
+  OR: [
+    {
+      ownerId: userId,
+    },
+    {
+      members: {
+        some: {
+          userId,
+        },
+      },
+    },
+  ],
+});
+
 const teamAccessWhere = (userId) => ({
   OR: [
     {
@@ -331,9 +365,17 @@ const teamAccessWhere = (userId) => ({
   ],
 });
 
-const listProjectsForUser = async (userId) => {
+const normalizeUsername = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const listProjectsForUser = async (userId, workspaceId) => {
   const projects = await projectDbService.listProjects({
-    where: userAccessWhere(userId),
+    where: {
+      ...userAccessWhere(userId),
+      ...(workspaceId ? { workspaceId } : {}),
+    },
     select: {
       id: true,
       name: true,
@@ -346,6 +388,7 @@ const listProjectsForUser = async (userId) => {
           id: true,
           name: true,
           slug: true,
+          joinCode: true,
         },
       },
       team: {
@@ -402,39 +445,339 @@ const buildWorkspaceSlug = async (base) => {
   return `${toSlugBase(base)}-${Date.now()}`;
 };
 
-const ensureOwnedWorkspace = async (userId) => {
-  const owned = await workspaceDbService.listWorkspaces({
-    where: { ownerId: userId },
-    select: { id: true, name: true, slug: true, ownerId: true },
-    orderBy: [{ createdAt: "asc" }],
-    take: 1,
-  });
-
-  if (owned.length) {
-    return owned[0];
+const generateWorkspaceJoinCode = async () => {
+  for (let index = 0; index < 12; index += 1) {
+    const code = `TF-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const existing = await workspaceDbService.getWorkspaceByJoinCode(code, {
+      select: { id: true },
+    });
+    if (!existing) {
+      return code;
+    }
   }
 
-  const user = await userDbService.getUserById(userId);
+  return `TF-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+};
+
+const listWorkspacesForUser = async (userId) => {
+  const workspaces = await workspaceDbService.listWorkspaces({
+    where: workspaceAccessWhere(userId),
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      joinCode: true,
+      description: true,
+      ownerId: true,
+      createdAt: true,
+      updatedAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          email: true,
+        },
+      },
+      _count: {
+        select: {
+          projects: true,
+          members: true,
+          teams: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+  });
+
+  const hydratedWorkspaces = await Promise.all(
+    workspaces.map(async (workspace) => {
+      let joinCode = workspace.joinCode;
+
+      if (!joinCode) {
+        joinCode = await generateWorkspaceJoinCode();
+        await workspaceDbService.updateWorkspace(workspace.id, { joinCode });
+      }
+
+      const membership =
+        workspace.ownerId === userId
+          ? null
+          : await workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
+              workspace.id,
+              userId,
+              { select: { role: true } },
+            );
+
+      return {
+        ...workspace,
+        joinCode,
+        role:
+          workspace.ownerId === userId
+            ? "OWNER"
+            : membership?.role || "MEMBER",
+      };
+    }),
+  );
+
+  return hydratedWorkspaces;
+};
+
+const createWorkspaceForUser = async (payload, userId) => {
+  const user = await userDbService.getUserById(userId, {
+    select: { id: true, name: true },
+  });
 
   if (!user) {
     throw new AppError("User not found.", 404);
   }
 
-  const slug = await buildWorkspaceSlug(`${user.name}-workspace`);
+  const slug = await buildWorkspaceSlug(payload.name);
+  const joinCode = await generateWorkspaceJoinCode();
 
-  return workspaceDbService.createWorkspace({
-    name: `${user.name.split(" ")[0] || "My"} Workspace`,
-    description: "Personal workspace",
+  const workspace = await workspaceDbService.createWorkspace({
+    name: payload.name,
+    description: payload.description ?? null,
     ownerId: userId,
     slug,
+    joinCode,
+  });
+
+  const existingMembership =
+    await workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
+      workspace.id,
+      userId,
+      { select: { id: true } },
+    );
+
+  if (!existingMembership) {
+    await workspaceMemberDbService.createWorkspaceMember({
+      workspaceId: workspace.id,
+      userId,
+      role: "OWNER",
+    });
+  }
+
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    joinCode: workspace.joinCode,
+    description: workspace.description,
+    ownerId: workspace.ownerId,
+    createdAt: workspace.createdAt,
+    updatedAt: workspace.updatedAt,
+    role: "OWNER",
+  };
+};
+
+const generateInviteCode = async () => {
+  for (let index = 0; index < 10; index += 1) {
+    const code = `TF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const existing = await workspaceInviteDbService.getWorkspaceInviteByCode(code, {
+      select: { id: true },
+    });
+    if (!existing) return code;
+  }
+  return `TF-${Date.now().toString(36).toUpperCase()}`;
+};
+
+const createWorkspaceInvite = async (workspaceId, payload, userId) => {
+  const workspace = await workspaceDbService.getWorkspaceById(workspaceId, {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      ownerId: true,
+    },
+  });
+
+  if (!workspace) {
+    throw new AppError("Workspace not found.", 404);
+  }
+
+  await ensureWorkspaceTaskManagementAccess(workspace, userId);
+  const code = await generateInviteCode();
+
+  return workspaceInviteDbService.createWorkspaceInvite({
+    workspaceId,
+    code,
+    createdById: userId,
+    roleToAssign: payload.roleToAssign || "MEMBER",
+    expiresAt: payload.expiresAt || null,
   });
 };
 
+const listWorkspaceInvites = async (workspaceId, userId) => {
+  const workspace = await workspaceDbService.getWorkspaceById(workspaceId, {
+    select: {
+      id: true,
+      ownerId: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  if (!workspace) {
+    throw new AppError("Workspace not found.", 404);
+  }
+
+  await ensureWorkspaceTaskManagementAccess(workspace, userId);
+
+  return workspaceInviteDbService.listWorkspaceInvites({
+    where: {
+      workspaceId,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+};
+
+const joinWorkspaceByCode = async (workspaceCode, userId) => {
+  const code = String(workspaceCode || "").trim().toUpperCase();
+
+  const workspace = await workspaceDbService.getWorkspaceByJoinCode(code, {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      joinCode: true,
+      ownerId: true,
+    },
+  });
+
+  if (workspace) {
+    if (workspace.ownerId === userId) {
+      return {
+        workspace: {
+          id: workspace.id,
+          name: workspace.name,
+          slug: workspace.slug,
+          joinCode: workspace.joinCode,
+        },
+        alreadyMember: true,
+        role: "OWNER",
+      };
+    }
+
+    const existingMembership =
+      await workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
+        workspace.id,
+        userId,
+      );
+
+    if (!existingMembership) {
+      await workspaceMemberDbService.createWorkspaceMember({
+        workspaceId: workspace.id,
+        userId,
+        role: "MEMBER",
+      });
+    }
+
+    return {
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        slug: workspace.slug,
+        joinCode: workspace.joinCode,
+      },
+      alreadyMember: Boolean(existingMembership),
+      role: existingMembership?.role || "MEMBER",
+    };
+  }
+
+  const invite = await workspaceInviteDbService.getWorkspaceInviteByCode(code);
+
+  if (!invite) {
+    throw new AppError("Workspace code is invalid.", 404);
+  }
+
+  if (invite.revokedAt) {
+    throw new AppError("Workspace invite code has been revoked.", 400);
+  }
+
+  if (invite.expiresAt && new Date(invite.expiresAt).valueOf() < Date.now()) {
+    throw new AppError("Workspace invite code has expired.", 400);
+  }
+
+  if (invite.workspace.ownerId === userId) {
+    return {
+      workspace: {
+        id: invite.workspace.id,
+        name: invite.workspace.name,
+        slug: invite.workspace.slug,
+        joinCode: invite.workspace.joinCode || null,
+      },
+      alreadyMember: true,
+      role: "OWNER",
+    };
+  }
+
+  const existingMembership =
+    await workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
+      invite.workspaceId,
+      userId,
+    );
+
+  if (!existingMembership) {
+    await workspaceMemberDbService.createWorkspaceMember({
+      workspaceId: invite.workspaceId,
+      userId,
+      role: invite.roleToAssign || "MEMBER",
+    });
+  }
+
+  return {
+    workspace: {
+      id: invite.workspace.id,
+      name: invite.workspace.name,
+      slug: invite.workspace.slug,
+      joinCode: invite.workspace.joinCode || null,
+    },
+    alreadyMember: Boolean(existingMembership),
+    role: existingMembership?.role || invite.roleToAssign || "MEMBER",
+  };
+};
+
 const createProjectForUser = async (payload, userId) => {
-  const workspace = await ensureOwnedWorkspace(userId);
+  let workspace = null;
+
+  if (payload.workspaceId) {
+    workspace = await workspaceDbService.getWorkspaceById(payload.workspaceId, {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        ownerId: true,
+      },
+    });
+  } else {
+    const accessible = await listWorkspacesForUser(userId);
+    workspace = accessible[0] || null;
+  }
+
+  if (!workspace) {
+    throw new AppError("Create or join a workspace before creating projects.", 400);
+  }
+
+  await ensureWorkspaceTaskManagementAccess(workspace, userId);
+
+  if (payload.teamId) {
+    const team = await teamDbService.getTeamById(payload.teamId, {
+      select: {
+        id: true,
+        workspaceId: true,
+      },
+    });
+
+    if (!team || team.workspaceId !== workspace.id) {
+      throw new AppError("Selected team must belong to the chosen workspace.", 400);
+    }
+  }
 
   const project = await projectDbService.createProject({
     workspaceId: workspace.id,
+    teamId: payload.teamId || null,
     name: payload.name,
     description: payload.description ?? null,
     status: "ACTIVE",
@@ -580,7 +923,15 @@ const getTasksByProject = async (projectId, query, userId) => {
 const listProjectAssignees = async (projectId, userId) => {
   const { project } = await ensureProjectAccess(projectId, userId);
 
-  const [members, owner, teamMembers] = await Promise.all([
+  const [owner, workspaceMembers, teamMembers] = await Promise.all([
+    userDbService.getUserById(project.workspace.ownerId, {
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+      },
+    }),
     workspaceMemberDbService.listWorkspaceMembers({
       where: {
         workspaceId: project.workspace.id,
@@ -590,18 +941,12 @@ const listProjectAssignees = async (projectId, userId) => {
           select: {
             id: true,
             name: true,
+            username: true,
             email: true,
           },
         },
       },
       orderBy: [{ user: { name: "asc" } }],
-    }),
-    userDbService.getUserById(project.workspace.ownerId, {
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
     }),
     project.teamId
       ? teamMemberDbService.listTeamMembers(project.teamId, {
@@ -612,6 +957,7 @@ const listProjectAssignees = async (projectId, userId) => {
               select: {
                 id: true,
                 name: true,
+                username: true,
                 email: true,
               },
             },
@@ -628,9 +974,13 @@ const listProjectAssignees = async (projectId, userId) => {
     prioritized.push(user);
   };
 
-  teamMembers.forEach((member) => pushUnique(member.user));
-  pushUnique(owner);
-  members.forEach((member) => pushUnique(member.user));
+  if (project.teamId) {
+    teamMembers.forEach((member) => pushUnique(member.user));
+    pushUnique(owner);
+  } else {
+    pushUnique(owner);
+    workspaceMembers.forEach((member) => pushUnique(member.user));
+  }
 
   return prioritized;
 };
@@ -694,9 +1044,12 @@ const listTeamsByWorkspace = async (workspaceId, userId) => {
   });
 };
 
-const listTeamsForUser = async (userId) => {
+const listTeamsForUser = async (userId, workspaceId) => {
   return teamDbService.listTeams({
-    where: teamAccessWhere(userId),
+    where: {
+      ...teamAccessWhere(userId),
+      ...(workspaceId ? { workspaceId } : {}),
+    },
     select: teamDbService.teamDetailSelect,
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
   });
@@ -720,6 +1073,7 @@ const createTeamInWorkspace = async (workspaceId, payload, userId) => {
 
   const created = await teamDbService.createTeam({
     workspaceId,
+    createdById: userId,
     name: payload.name,
     description: payload.description ?? null,
   });
@@ -761,7 +1115,7 @@ const listWorkspaceMembersForWorkspace = async (workspaceId, userId) => {
 
   const [owner, members] = await Promise.all([
     userDbService.getUserById(workspace.ownerId, {
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, username: true, email: true },
     }),
     workspaceMemberDbService.listWorkspaceMembers({
       where: { workspaceId },
@@ -770,6 +1124,7 @@ const listWorkspaceMembersForWorkspace = async (workspaceId, userId) => {
           select: {
             id: true,
             name: true,
+            username: true,
             email: true,
           },
         },
@@ -798,24 +1153,39 @@ const listTeamMembers = async (teamId, userId) => {
 
 const addTeamMember = async (teamId, payload, userId) => {
   const { team } = await ensureTeamManagementAccess(teamId, userId);
+  const username = normalizeUsername(payload.username);
+  const user = await userDbService.getUserByUsername(username, {
+    select: {
+      id: true,
+      username: true,
+      name: true,
+    },
+  });
 
-  if (payload.userId === team.workspace.ownerId) {
+  if (!user) {
+    throw new AppError("User with that username was not found.", 404);
+  }
+
+  if (user.id === team.workspace.ownerId) {
     throw new AppError("Workspace owner is implicitly part of all teams.", 400);
   }
 
   const workspaceMembership =
     await workspaceMemberDbService.getWorkspaceMemberByWorkspaceAndUser(
       team.workspace.id,
-      payload.userId,
+      user.id,
     );
 
   if (!workspaceMembership) {
-    throw new AppError("User must be a workspace member before joining a team.", 400);
+    throw new AppError(
+      "User must join the workspace before they can be added to this team.",
+      400,
+    );
   }
 
   const existing = await teamMemberDbService.getTeamMemberByTeamAndUser(
     teamId,
-    payload.userId,
+    user.id,
     {
       select: { id: true },
     },
@@ -827,20 +1197,23 @@ const addTeamMember = async (teamId, payload, userId) => {
 
   return teamMemberDbService.createTeamMember({
     teamId,
-    userId: payload.userId,
+    userId: user.id,
     role: payload.role || "MEMBER",
   });
 };
 
-const removeTeamMember = async (teamId, memberId, userId) => {
+const removeTeamMember = async (teamId, memberUserId, userId) => {
   await ensureTeamManagementAccess(teamId, userId);
-  const member = await teamMemberDbService.getTeamMemberById(memberId);
+  const member = await teamMemberDbService.getTeamMemberByTeamAndUser(
+    teamId,
+    memberUserId,
+  );
 
   if (!member || member.teamId !== teamId) {
     throw new AppError("Team member not found.", 404);
   }
 
-  return teamMemberDbService.deleteTeamMember(memberId);
+  return teamMemberDbService.deleteTeamMember(member.id);
 };
 
 const linkProjectToTeam = async (projectId, teamId, userId) => {
@@ -858,6 +1231,11 @@ const linkProjectToTeam = async (projectId, teamId, userId) => {
 
 module.exports = {
   listProjectsForUser,
+  listWorkspacesForUser,
+  createWorkspaceForUser,
+  createWorkspaceInvite,
+  listWorkspaceInvites,
+  joinWorkspaceByCode,
   createProjectForUser,
   getDashboardOverview,
   createTask,

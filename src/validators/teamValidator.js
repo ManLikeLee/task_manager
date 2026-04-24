@@ -11,7 +11,7 @@ const teamIdParamsSchema = z.object({
 });
 
 const teamMemberIdParamsSchema = z.object({
-  memberId: z.string().trim().uuid(cuidOrUuidMessage),
+  userId: z.string().trim().uuid(cuidOrUuidMessage),
 });
 
 const createTeamSchema = z.object({
@@ -48,7 +48,16 @@ const updateTeamSchema = z
   });
 
 const addTeamMemberSchema = z.object({
-  userId: z.string().trim().uuid(cuidOrUuidMessage),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3, "Username must be at least 3 characters long.")
+    .max(30, "Username must be 30 characters or fewer.")
+    .regex(
+      /^[a-z0-9_-]+$/,
+      "Username can only contain lowercase letters, numbers, underscores, and hyphens.",
+    ),
   role: z.enum(["LEAD", "MEMBER"]).optional(),
 });
 
@@ -60,14 +69,18 @@ const projectIdParamsSchema = z.object({
   projectId: z.string().trim().uuid(cuidOrUuidMessage),
 });
 
+const listTeamsQuerySchema = z.object({
+  workspaceId: z.string().trim().uuid(cuidOrUuidMessage).optional(),
+});
+
 module.exports = {
   workspaceIdParamsSchema,
   teamIdParamsSchema,
   teamMemberIdParamsSchema,
   projectIdParamsSchema,
+  listTeamsQuerySchema,
   createTeamSchema,
   updateTeamSchema,
   addTeamMemberSchema,
   linkProjectTeamSchema,
 };
-

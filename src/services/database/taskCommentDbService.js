@@ -11,6 +11,7 @@ const taskCommentSelect = {
     select: {
       id: true,
       name: true,
+      username: true,
       email: true,
     },
   },
@@ -35,4 +36,3 @@ module.exports = {
   createComment,
   taskCommentSelect,
 };
-

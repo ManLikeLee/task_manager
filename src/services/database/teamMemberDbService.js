@@ -11,6 +11,7 @@ const teamMemberSelect = {
     select: {
       id: true,
       name: true,
+      username: true,
       email: true,
     },
   },
@@ -62,4 +63,3 @@ module.exports = {
   deleteTeamMember,
   teamMemberSelect,
 };
-

@@ -4,7 +4,8 @@ import { useProjects } from '@/features/projects/hooks'
 import { useTaskUiStore } from '@/features/tasks/store'
 
 export const ProjectSwitcher = () => {
-  const projects = useProjects()
+  const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
+  const projects = useProjects(activeWorkspaceId || undefined)
   const selectedProjectId = useTaskUiStore((state) => state.selectedProjectId)
   const setSelectedProjectId = useTaskUiStore((state) => state.setSelectedProjectId)
 

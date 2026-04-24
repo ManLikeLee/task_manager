@@ -5,7 +5,8 @@ import { useTaskUiStore } from '@/features/tasks/store'
 
 export const ProjectsPage = () => {
   const navigate = useNavigate()
-  const projects = useProjects()
+  const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
+  const projects = useProjects(activeWorkspaceId || undefined)
   const selectedProjectId = useTaskUiStore((state) => state.selectedProjectId)
   const setSelectedProjectId = useTaskUiStore((state) => state.setSelectedProjectId)
   const setBoardView = useTaskUiStore((state) => state.setBoardView)

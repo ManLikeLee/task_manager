@@ -22,6 +22,12 @@ const getUserByEmail = (email, options = {}) =>
     ...options,
   });
 
+const getUserByUsername = (username, options = {}) =>
+  prisma.user.findUnique({
+    where: { username },
+    ...options,
+  });
+
 const getUserByRefreshTokenHash = (refreshTokenHash, options = {}) =>
   prisma.user.findFirst({
     where: { refreshTokenHash },
@@ -43,6 +49,7 @@ module.exports = {
   createUser,
   listUsers,
   getUserByEmail,
+  getUserByUsername,
   getUserById,
   getUserByRefreshTokenHash,
   updateUser,

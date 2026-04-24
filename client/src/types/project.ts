@@ -12,6 +12,7 @@ export type Project = {
     id: string
     name: string
     slug: string
+    joinCode?: string | null
   }
   team?: {
     id: string
