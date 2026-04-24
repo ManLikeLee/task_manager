@@ -19,6 +19,7 @@ export const Topbar = () => {
   const setShowFilters = useTaskUiStore((state) => state.setShowFilters)
 
   const selectedProject = projects.data?.find((project) => project.id === selectedProjectId) || null
+  const hasWorkspace = Boolean(workspaces.data?.length)
   const selectedProjectName = selectedProject?.name || 'Task board'
   const activeWorkspaceName =
     workspaces.data?.find((workspace) => workspace.id === activeWorkspaceId)?.name ||
@@ -87,7 +88,8 @@ export const Topbar = () => {
               className="add-btn"
               style={{ background: 'var(--tf-gold)', color: '#1a1200' }}
               onClick={() => (boardView === 'projects' ? setCreateProjectOpen(true) : setCreateTaskOpen(true))}
-              disabled={boardView === 'board' && !canCreateTask}
+              disabled={(boardView === 'board' && !canCreateTask) || (boardView === 'projects' && !hasWorkspace)}
+              title={boardView === 'projects' && !hasWorkspace ? 'Create a workspace first' : undefined}
             >
               <Plus className="h-3 w-3" />
               {boardView === 'projects' ? 'New project' : 'New task'}

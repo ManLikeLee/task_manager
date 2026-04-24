@@ -80,7 +80,6 @@ app.use(
 );
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "..", "public")));
 app.use(requestLogger);
 app.use(sanitizeRequest);
 app.use("/api", apiRateLimiter);
@@ -88,9 +87,21 @@ app.use("/api", apiRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api", routes);
 
-app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
-});
+if (!isDevelopment) {
+  app.use(express.static(path.join(__dirname, "..", "public")));
+
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+  });
+} else {
+  app.get("/", (_req, res) => {
+    res.status(200).json({
+      success: true,
+      message: "TaskForce API is running",
+      docs: "/api/health",
+    });
+  });
+}
 
 app.use(notFoundMiddleware);
 app.use(handleTokenExpiration);

@@ -47,6 +47,7 @@ export const Sidebar = () => {
       null
     )
   }, [activeWorkspace?.id, activeWorkspace?.joinCode, projects.data])
+  const hasWorkspace = Boolean(workspaces.data?.length)
 
   const content = (
     <div className="flex h-full flex-col">
@@ -81,27 +82,33 @@ export const Sidebar = () => {
           </button>
         </div>
         <div className="space-y-1.5 px-2 pb-2">
-          <select
-            value={activeWorkspace?.id || ''}
-            className="tf-sidebar-workspace-select"
-            onChange={(event) => {
-              const nextWorkspaceId = event.target.value
-              setActiveWorkspaceId(nextWorkspaceId)
-              setSelectedProjectId('')
-              setSelectedTaskId(null)
-              setBoardView('projects')
-              navigate('/projects')
-              setMobileOpen(false)
-            }}
-            aria-label="Switch workspace"
-          >
-            {(workspaces.data || []).map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </select>
-          {activeWorkspaceJoinCode ? (
+          {hasWorkspace ? (
+            <select
+              value={activeWorkspace?.id || ''}
+              className="tf-sidebar-workspace-select"
+              onChange={(event) => {
+                const nextWorkspaceId = event.target.value
+                setActiveWorkspaceId(nextWorkspaceId)
+                setSelectedProjectId('')
+                setSelectedTaskId(null)
+                setBoardView('projects')
+                navigate('/projects')
+                setMobileOpen(false)
+              }}
+              aria-label="Switch workspace"
+            >
+              {(workspaces.data || []).map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="rounded-md border border-dashed px-2 py-1.5 text-[10.5px]" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-text-3)' }}>
+              No workspace selected
+            </div>
+          )}
+          {hasWorkspace && activeWorkspaceJoinCode ? (
             <button
               type="button"
               className="tf-sidebar-workspace-code"
@@ -120,11 +127,11 @@ export const Sidebar = () => {
               {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
               {activeWorkspaceJoinCode}
             </button>
-          ) : (
+          ) : hasWorkspace ? (
             <p className="text-[10px]" style={{ color: 'var(--tf-text-3)' }}>
               Workspace code unavailable
             </p>
-          )}
+          ) : null}
         </div>
         <button
           type="button"
@@ -183,6 +190,8 @@ export const Sidebar = () => {
             style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-text-3)' }}
             onClick={() => setCreateProjectOpen(true)}
             aria-label="Create project"
+            disabled={!hasWorkspace}
+            title={hasWorkspace ? 'Create project' : 'Create a workspace first'}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>

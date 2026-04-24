@@ -10,7 +10,7 @@ Modern frontend for TaskForce.
    - `cp .env.example .env`
 3. Start dev server:
    - `npm run dev`
-4. Ensure backend API is running (default expected target: `http://127.0.0.1:5050`)
+4. Ensure backend API is running (default expected target: `http://127.0.0.1:4050`)
 
 ## Environment
 

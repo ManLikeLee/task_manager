@@ -2,15 +2,18 @@ import { FolderOpenDot, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useProjects } from '@/features/projects/hooks'
 import { useTaskUiStore } from '@/features/tasks/store'
+import { useWorkspaces } from '@/features/workspaces/hooks'
 
 export const ProjectsPage = () => {
   const navigate = useNavigate()
   const activeWorkspaceId = useTaskUiStore((state) => state.activeWorkspaceId)
   const projects = useProjects(activeWorkspaceId || undefined)
+  const workspaces = useWorkspaces()
   const selectedProjectId = useTaskUiStore((state) => state.selectedProjectId)
   const setSelectedProjectId = useTaskUiStore((state) => state.setSelectedProjectId)
   const setBoardView = useTaskUiStore((state) => state.setBoardView)
   const setCreateProjectOpen = useTaskUiStore((state) => state.setCreateProjectOpen)
+  const hasWorkspace = Boolean(workspaces.data?.length)
 
   if (projects.isLoading) {
     return (
@@ -34,7 +37,26 @@ export const ProjectsPage = () => {
 
   return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-7">
-      {!projects.data?.length ? (
+      {!hasWorkspace ? (
+        <div
+          className="mx-auto mt-8 max-w-md rounded-2xl border border-dashed p-7 text-center"
+          style={{ borderColor: 'var(--tf-border-2)', background: 'var(--tf-bg-3)' }}
+        >
+          <h2 className="text-[30px] font-light leading-[1.2]" style={{ fontFamily: 'var(--font-display)' }}>
+            Create your first workspace
+          </h2>
+          <p className="mt-2 text-sm font-ui leading-6" style={{ color: 'var(--tf-text-2)' }}>
+            You skipped setup. Create or join a workspace to start creating projects.
+          </p>
+          <button
+            type="button"
+            className="tf-primary-btn mt-5"
+            onClick={() => navigate('/settings')}
+          >
+            Open settings
+          </button>
+        </div>
+      ) : !projects.data?.length ? (
         <div
           className="mx-auto mt-8 max-w-md rounded-2xl border border-dashed p-6 text-center"
           style={{ borderColor: 'var(--tf-border-2)', background: 'var(--tf-bg-3)' }}

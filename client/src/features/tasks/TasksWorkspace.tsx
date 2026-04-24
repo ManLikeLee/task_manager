@@ -85,6 +85,7 @@ export const TasksWorkspace = () => {
   )
 
   const hasProjects = Boolean(projects.data?.length)
+  const hasWorkspaces = Boolean(workspaces.data?.length)
   const canCreateTask = hasProjects && Boolean(selectedProjectId)
 
   const tasks = useTasks(selectedProjectId, filters)
@@ -186,7 +187,30 @@ export const TasksWorkspace = () => {
           ) : null}
 
           <section className="min-h-0 flex-1 overflow-hidden px-4 py-5 lg:px-7">
-            {!hasProjects ? (
+            {!hasWorkspaces ? (
+              <div
+                className="mx-auto mt-8 max-w-md rounded-2xl border border-dashed p-6 text-center"
+                style={{ borderColor: 'var(--tf-border-2)', background: 'var(--tf-bg-3)' }}
+              >
+                <h2 className="text-2xl" style={{ fontFamily: 'var(--font-display)' }}>
+                  Create your first workspace
+                </h2>
+                <p className="mt-2 text-sm" style={{ color: 'var(--tf-text-2)' }}>
+                  You can skip setup, then create or join a workspace anytime from Settings.
+                </p>
+                <button
+                  type="button"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold"
+                  style={{ background: 'var(--tf-gold)', color: '#1a1200' }}
+                  onClick={() => {
+                    setBoardView('settings')
+                    navigate('/settings')
+                  }}
+                >
+                  Open settings
+                </button>
+              </div>
+            ) : !hasProjects ? (
               <div
                 className="mx-auto mt-8 max-w-md rounded-2xl border border-dashed p-6 text-center"
                 style={{ borderColor: 'var(--tf-border-2)', background: 'var(--tf-bg-3)' }}

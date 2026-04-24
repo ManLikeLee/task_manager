@@ -7,6 +7,7 @@ import { SegmentedTabs } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/toast'
 import { useLogin, useRegister } from '@/features/auth/hooks'
 import { useAuthStore } from '@/features/auth/store'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const authItems = [
   { value: 'login', label: 'Login' },
@@ -21,6 +22,7 @@ export const AuthPage = () => {
   const login = useLogin()
   const register = useRegister()
   const { notify } = useToast()
+  usePageTitle(mode === 'login' ? 'Login' : 'Register')
 
   if (user) {
     return <Navigate to="/" replace />

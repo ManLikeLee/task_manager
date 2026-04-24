@@ -275,6 +275,12 @@ textarea {
   background: #e4b861 !important;
 }
 
+.add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: saturate(0.7);
+}
+
 .tab-bar {
   gap: 2px;
 }

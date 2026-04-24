@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useProjects } from '@/features/projects/hooks'
 import { useTaskUiStore } from '@/features/tasks/store'
@@ -6,6 +6,7 @@ import { Sidebar } from '@/layouts/Sidebar'
 import { Topbar } from '@/layouts/Topbar'
 import { TasksWorkspace } from '@/features/tasks/TasksWorkspace'
 import { useWorkspaces } from '@/features/workspaces/hooks'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export const AppShell = () => {
   const navigate = useNavigate()
@@ -20,6 +21,32 @@ export const AppShell = () => {
   const setSelectedProjectId = useTaskUiStore((state) => state.setSelectedProjectId)
   const setBoardView = useTaskUiStore((state) => state.setBoardView)
   const setSelectedTaskId = useTaskUiStore((state) => state.setSelectedTaskId)
+
+  const pageTitle = useMemo(() => {
+    const pathname = location.pathname
+    const availableProjects = projects.data || []
+
+    if (pathname === '/projects') return 'Projects'
+    if (pathname === '/teams') return 'Teams'
+    if (pathname === '/settings') return 'Settings'
+
+    const projectRouteMatch = pathname.match(/^\/projects\/([^/]+)$/)
+    if (projectRouteMatch) {
+      if (projects.isLoading) return 'Loading Project'
+      const routeProjectId = decodeURIComponent(projectRouteMatch[1])
+      const routeProject = availableProjects.find((project) => project.id === routeProjectId)
+      return routeProject?.name || 'Board'
+    }
+
+    if (boardView === 'teams') return 'Teams'
+    if (boardView === 'settings') return 'Settings'
+    if (boardView === 'projects') return 'Projects'
+
+    const selectedProject = availableProjects.find((project) => project.id === selectedProjectId)
+    return selectedProject?.name || availableProjects[0]?.name || 'Board'
+  }, [boardView, location.pathname, projects.data, projects.isLoading, selectedProjectId])
+
+  usePageTitle(pageTitle)
 
   useEffect(() => {
     if (workspaces.isLoading) return

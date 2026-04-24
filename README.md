@@ -16,11 +16,12 @@ Express + Prisma backend with a modern React + TypeScript frontend in [`client/`
    - `npm run prisma:generate`
    - `npm run prisma:migrate`
 6. Start backend API:
-   - `PORT=5050 npm run dev:api`
+   - `npm run dev:api`
 7. Start frontend app:
    - `npm run dev:client`
 8. Open:
-   - `http://localhost:3000`
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:4050`
 
 ## Frontend Stack
 
@@ -48,6 +49,7 @@ Primary UI surfaces:
 Required core vars (see `.env.example`):
 
 - `PORT`: HTTP port (default `5000`)
+- `PORT`: HTTP port (default `4050` in this project)
 - `NODE_ENV`: environment (`development`, `test`, `production`)
 - `CLIENT_URL`: allowed CORS origin
 - `DATABASE_URL`: PostgreSQL connection string
@@ -141,6 +143,10 @@ Frontend migration:
 - The legacy static frontend under `public/` is now deprecated.
 - The intended UI is the Vite client in `client/`.
 - Keep `public/` only as temporary backward compatibility while teams migrate.
+- In development, the backend is API-only:
+  - `GET /` returns JSON API status
+  - no static frontend fallback is served
+- Static frontend fallback from `public/` is only enabled in `production`.
 - See [docs/frontend-migration.md](docs/frontend-migration.md) for a short migration summary.
 
 Task list endpoint migration:
