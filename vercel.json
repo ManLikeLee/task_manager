@@ -3,11 +3,6 @@
   "buildCommand": "npm run build:client",
   "outputDirectory": "client/dist",
   "installCommand": "npm install",
-  "functions": {
-    "server.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "routes": [
     {
       "src": "/api/(.*)",
