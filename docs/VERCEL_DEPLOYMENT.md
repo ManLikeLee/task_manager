@@ -15,12 +15,15 @@ The previous mixed setup (static output + `routes` to `server.js`) caused deploy
 ```json
 {
   "version": 2,
+  "framework": "vite",
   "buildCommand": "npm run build:client",
   "outputDirectory": "client/dist"
 }
 ```
 
 This deploys only the built frontend in `client/dist`.
+
+In Vercel Project Settings, ensure **Framework Preset** is `Vite` (or `Other` for static), not `Node.js`.
 
 ## Backend Strategy
 
