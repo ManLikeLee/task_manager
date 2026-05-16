@@ -22,6 +22,18 @@ const errorHandlerMiddleware = (err, req, res, _next) => {
     ...(requestPayloadContext ? { request: requestPayloadContext } : {}),
   });
 
+  // Handle Prisma client initialization errors (e.g., missing DATABASE_URL)
+  if (err.code === "P1011" || err.message?.includes("Environment variable")) {
+    return sendError(res, {
+      statusCode: 503,
+      message: isDevelopment
+        ? `Database connection error: ${err.message}`
+        : "Database service unavailable. Please try again later.",
+      code: "DATABASE_CONNECTION_ERROR",
+      requestId: req.requestId,
+    });
+  }
+
   if (err.code === "P2025") {
     return sendError(res, {
       statusCode: 404,
@@ -61,13 +73,22 @@ const errorHandlerMiddleware = (err, req, res, _next) => {
     });
   }
 
+  if (err.name === "PrismaClientRustPanicError" || err.name === "PrismaClientInitializationError") {
+    return sendError(res, {
+      statusCode: 503,
+      message: isDevelopment ? err.message : "Database service error. Please try again later.",
+      code: "DATABASE_SERVICE_ERROR",
+      requestId: req.requestId,
+    });
+  }
+
   const statusCode = err.statusCode || 500;
 
   return sendError(res, {
     statusCode,
-    message: err.message || "Internal server error.",
+    message: isDevelopment ? (err.message || "Internal server error.") : "Internal server error.",
     code: err.code,
-    errors: err.errors,
+    errors: isDevelopment ? err.errors : undefined,
     requestId: req.requestId,
   });
 };

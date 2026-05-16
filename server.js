@@ -3,6 +3,17 @@ require("dotenv").config();
 const app = require("./src/app");
 const prisma = require("./src/prisma/client");
 const logger = require("./src/utils/logger");
+const validateEnvironment = require("./src/utils/validateEnvironment");
+
+// Validate critical environment variables at startup
+try {
+  validateEnvironment();
+} catch (error) {
+  logger.error("startup.validation_failed", {
+    error: error.message,
+  });
+  process.exit(1);
+}
 
 const requestedPort = Number(process.env.PORT) || 4050;
 const candidatePorts = process.env.PORT ? [requestedPort] : [4050, 5050];

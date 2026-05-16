@@ -146,7 +146,7 @@ Frontend migration:
 - In development, the backend is API-only:
   - `GET /` returns JSON API status
   - no static frontend fallback is served
-- Static frontend fallback from `public/` is only enabled in `production`.
+- **In production, the Vite client from `client/dist/` is now served** (not the deprecated `/public`).
 - See [docs/frontend-migration.md](docs/frontend-migration.md) for a short migration summary.
 
 Task list endpoint migration:
@@ -161,6 +161,35 @@ Client migration recommendation:
 1. Switch reads to `GET /api/projects/:projectId/tasks`.
 2. Keep handling current response payload (`tasks`, `nextCursor`, `hasMore`).
 3. Remove reliance on deprecated route before it is removed in a future release.
+
+## Production Deployment
+
+### Vercel
+
+To deploy to Vercel:
+
+1. **Configure environment variables** in Vercel Dashboard:
+   - `NODE_ENV=production`
+   - `DATABASE_URL` (PostgreSQL connection string)
+   - `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`
+   - `CLIENT_URL` (your production domain)
+   - `COOKIE_SECURE=true` and `COOKIE_SAMESITE=none`
+   - See [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md) for all required and optional variables
+
+2. **Automatic CI/CD**:
+   - Connect your Git repo to Vercel
+   - Every push to main branch triggers deployment
+   - `vercel.json` automatically configures the build:
+     - Runs `npm run build:client`
+     - Serves `client/dist/` as frontend
+     - Routes `/api/*` to `server.js` backend
+
+3. **Verify deployment**:
+   - Visit `https://yourdomain.com/api/health` (should return `{ success: true }`)
+   - Try registering and logging in
+   - Check that you see the new dark Vite UI (not the old white UI)
+
+For detailed deployment guide, see [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 
 ## More Developer Notes
 

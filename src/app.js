@@ -91,10 +91,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api", routes);
 
 if (!isDevelopment) {
-  app.use(express.static(path.join(__dirname, "..", "public")));
+  // Serve the new Vite client build (not the deprecated /public)
+  const clientDistPath = path.join(__dirname, "..", "client", "dist");
+  app.use(express.static(clientDistPath));
 
   app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
-    res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+    res.sendFile(path.join(clientDistPath, "index.html"));
   });
 } else {
   app.get("/", (_req, res) => {
