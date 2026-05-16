@@ -1,16 +1,5 @@
 {
   "version": 2,
   "buildCommand": "npm run build:client",
-  "outputDirectory": "client/dist",
-  "installCommand": "npm install",
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/dist/index.html"
-    }
-  ]
+  "outputDirectory": "client/dist"
 }

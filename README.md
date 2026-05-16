@@ -166,28 +166,14 @@ Client migration recommendation:
 
 ### Vercel
 
-To deploy to Vercel:
+Vercel in this repo is configured as **frontend-only static hosting** for the Vite app.
 
-1. **Configure environment variables** in Vercel Dashboard:
-   - `NODE_ENV=production`
-   - `DATABASE_URL` (PostgreSQL connection string)
-   - `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`
-   - `CLIENT_URL` (your production domain)
-   - `COOKIE_SECURE=true` and `COOKIE_SAMESITE=none`
-   - See [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md) for all required and optional variables
-
-2. **Automatic CI/CD**:
-   - Connect your Git repo to Vercel
-   - Every push to main branch triggers deployment
-   - `vercel.json` automatically configures the build:
-     - Runs `npm run build:client`
-     - Serves `client/dist/` as frontend
-     - Routes `/api/*` to `server.js` backend
-
-3. **Verify deployment**:
-   - Visit `https://yourdomain.com/api/health` (should return `{ success: true }`)
-   - Try registering and logging in
-   - Check that you see the new dark Vite UI (not the old white UI)
+1. Configure `VITE_API_BASE_URL` in Vercel (for example `https://api.yourdomain.com`).
+2. Connect the repo to Vercel and deploy; `vercel.json` runs `npm run build:client` and serves `client/dist`.
+3. Host the Express API separately (Render, Railway, Fly.io, etc.) and point `VITE_API_BASE_URL` to that backend.
+4. Verify:
+   - App loads at your Vercel domain and shows the intended dark Vite UI.
+   - Frontend calls go to `${VITE_API_BASE_URL}/api/...` successfully.
 
 For detailed deployment guide, see [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 
