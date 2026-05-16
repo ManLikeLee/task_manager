@@ -1,5 +1,4 @@
 const express = require("express");
-const path = require("path");
 const cors = require("cors");
 const helmet = require("helmet");
 
@@ -90,23 +89,13 @@ app.use("/api", apiRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api", routes);
 
-if (!isDevelopment) {
-  // Serve the new Vite client build (not the deprecated /public)
-  const clientDistPath = path.join(__dirname, "..", "client", "dist");
-  app.use(express.static(clientDistPath));
-
-  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
-    res.sendFile(path.join(clientDistPath, "index.html"));
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "TaskForce API is running",
+    docs: "/api/health",
   });
-} else {
-  app.get("/", (_req, res) => {
-    res.status(200).json({
-      success: true,
-      message: "TaskForce API is running",
-      docs: "/api/health",
-    });
-  });
-}
+});
 
 app.use(notFoundMiddleware);
 app.use(handleTokenExpiration);
