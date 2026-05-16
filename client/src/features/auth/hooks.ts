@@ -38,10 +38,43 @@ export const useAuthBootstrap = () => {
 
 export const useLogin = () => {
   const setSession = useAuthStore((state) => state.setSession)
+  const setPendingVerificationEmail = useAuthStore((state) => state.setPendingVerificationEmail)
+  const setAccessToken = useAuthStore((state) => state.setAccessToken)
+  const setUser = useAuthStore((state) => state.setUser)
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: api.login,
+    onSuccess: (data) => {
+      if (data.requiresEmailVerification || !data.accessToken) {
+        setAccessToken('')
+        setUser(null)
+        setPendingVerificationEmail(data.email || data.user.email)
+        return
+      }
+      setSession({ accessToken: data.accessToken, user: data.user })
+      queryClient.invalidateQueries()
+    },
+  })
+}
+
+export const useRegister = () => {
+  const setPendingVerificationEmail = useAuthStore((state) => state.setPendingVerificationEmail)
+
+  return useMutation({
+    mutationFn: api.register,
+    onSuccess: (data) => {
+      setPendingVerificationEmail(data.email || data.user.email)
+    },
+  })
+}
+
+export const useVerifyEmail = () => {
+  const setSession = useAuthStore((state) => state.setSession)
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: api.verifyEmail,
     onSuccess: (data) => {
       setSession({ accessToken: data.accessToken, user: data.user })
       queryClient.invalidateQueries()
@@ -49,7 +82,10 @@ export const useLogin = () => {
   })
 }
 
-export const useRegister = () => useMutation({ mutationFn: api.register })
+export const useResendVerificationCode = () =>
+  useMutation({
+    mutationFn: api.resendVerificationCode,
+  })
 
 export const useLogout = () => {
   const logout = useAuthStore((state) => state.logout)

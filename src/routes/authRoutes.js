@@ -10,6 +10,8 @@ router.use(authRateLimiter);
 
 router.post("/register", authController.register);
 router.post("/login", authController.login);
+router.post("/verify-email", authController.verifyEmail);
+router.post("/resend-verification-code", authController.resendVerificationCode);
 router.post("/refresh", authController.refreshAccessToken);
 router.post("/logout", authController.logout);
 router.get("/me", verifyAccessToken, authController.getCurrentUser);

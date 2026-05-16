@@ -3,9 +3,19 @@ export type User = {
   name: string
   username: string
   email: string
+  emailVerified: boolean
+  emailVerifiedAt: string | null
   createdAt: string
   updatedAt: string
 }
+
+export type EmailDelivery = {
+  delivered: boolean
+  mode: 'provider' | 'dev_console'
+  provider?: 'smtp'
+  reason?: string
+  message?: string
+} | null
 
 export type LoginPayload = {
   email: string
@@ -20,6 +30,15 @@ export type RegisterPayload = {
 }
 
 export type LoginResponse = {
-  accessToken: string
+  accessToken?: string
   user: User
+  requiresEmailVerification?: boolean
+  email?: string
+  emailDelivery?: EmailDelivery
+  devMode?: boolean
+}
+
+export type VerifyEmailPayload = {
+  email: string
+  code: string
 }

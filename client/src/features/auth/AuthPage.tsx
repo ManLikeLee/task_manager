@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,9 @@ const authItems = [
 ]
 
 export const AuthPage = () => {
+  const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
+  const pendingVerificationEmail = useAuthStore((state) => state.pendingVerificationEmail)
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [form, setForm] = useState({ name: '', username: '', email: '', password: '' })
   const [fieldError, setFieldError] = useState('')
@@ -26,6 +28,10 @@ export const AuthPage = () => {
 
   if (user) {
     return <Navigate to="/" replace />
+  }
+
+  if (pendingVerificationEmail) {
+    return <Navigate to="/verify-email" replace />
   }
 
   const onSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
@@ -52,17 +58,28 @@ export const AuthPage = () => {
 
     try {
       if (mode === 'login') {
-        await login.mutateAsync({ email: form.email.trim(), password: form.password })
+        const response = await login.mutateAsync({ email: form.email.trim(), password: form.password })
+        if (response.requiresEmailVerification || !response.accessToken) {
+          const deliveryMessage = response.emailDelivery?.mode === 'dev_console'
+            ? 'Email not configured. Verification code logged in server console.'
+            : 'Please verify your email to continue.'
+          notify(deliveryMessage, response.emailDelivery?.mode === 'dev_console' ? 'success' : 'error')
+          navigate('/verify-email', { replace: true })
+          return
+        }
         notify('Welcome back.', 'success')
       } else {
-        await register.mutateAsync({
+        const response = await register.mutateAsync({
           name: form.name.trim(),
           username: form.username.trim().toLowerCase(),
           email: form.email.trim(),
           password: form.password,
         })
-        notify('Account created. Please log in.', 'success')
-        setMode('login')
+        const deliveryMessage = response.emailDelivery?.mode === 'dev_console'
+          ? 'Account created. Email not configured. Verification code logged in server console.'
+          : 'Account created. We sent a verification code to your email.'
+        notify(deliveryMessage, 'success')
+        navigate('/verify-email', { replace: true })
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Authentication failed.'

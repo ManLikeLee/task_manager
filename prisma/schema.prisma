@@ -46,6 +46,12 @@ model User {
   username         String            @unique
   email            String            @unique
   passwordHash     String
+  emailVerified    Boolean           @default(false)
+  emailVerifiedAt  DateTime?
+  emailVerificationCodeHash String?
+  emailVerificationExpiresAt DateTime?
+  emailVerificationAttempts Int      @default(0)
+  emailVerificationLastSentAt DateTime?
   refreshTokenHash String?
   ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
   workspaceMembers WorkspaceMember[]

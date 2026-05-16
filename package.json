@@ -13,6 +13,7 @@
     "prisma:migrate": "bash ./scripts/ensure-postgres.sh && prisma migrate dev",
     "prisma:validate": "bash ./scripts/ensure-postgres.sh && prisma validate",
     "backfill:workspace-codes": "node scripts/backfillWorkspaceJoinCodes.js",
+    "test:email": "node scripts/testEmailDelivery.js",
     "start": "node server.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "NODE_ENV=test jest --config tests/jest.unit.config.cjs",
@@ -31,6 +32,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
+    "nodemailer": "^7.0.5",
+    "resend": "^6.12.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

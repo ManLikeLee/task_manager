@@ -39,7 +39,29 @@ const loginSchema = z.object({
     .max(128, "Password must be 128 characters or fewer."),
 });
 
+const verifyEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("A valid email is required."),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Verification code must be a 6-digit number."),
+});
+
+const resendVerificationCodeSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("A valid email is required."),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
+  verifyEmailSchema,
+  resendVerificationCodeSchema,
 };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthPage } from '@/features/auth/AuthPage'
+import { VerifyEmailPage } from '@/features/auth/VerifyEmailPage'
 import { useAuthBootstrap } from '@/features/auth/hooks'
 import { useAuthStore } from '@/features/auth/store'
 import { OnboardingPage } from '@/features/workspaces/OnboardingPage'
@@ -24,7 +25,8 @@ const FullscreenLoader = () => (
 export const App = () => {
   const { hydrated, loading } = useAuthBootstrap()
   const user = useAuthStore((state) => state.user)
-  const workspaces = useWorkspaces(Boolean(user))
+  const pendingVerificationEmail = useAuthStore((state) => state.pendingVerificationEmail)
+  const workspaces = useWorkspaces(Boolean(user?.emailVerified))
   const workspaceCount = workspaces.data?.length || 0
   const [skippedOnboarding, setSkippedOnboarding] = useState(() =>
     hasSkippedWorkspaceOnboarding(user?.id),
@@ -40,7 +42,11 @@ export const App = () => {
       ? 'Loading Workspace'
       : null
     : !user
-      ? 'Login'
+      ? pendingVerificationEmail
+        ? 'Verify Email'
+        : 'Login'
+      : !user.emailVerified
+        ? 'Verify Email'
       : needsOnboarding
         ? 'Create Workspace'
         : null
@@ -77,19 +83,27 @@ export const App = () => {
       {!user ? (
         <>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="*" element={<Navigate to="/auth" replace />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="*" element={<Navigate to={pendingVerificationEmail ? '/verify-email' : '/auth'} replace />} />
         </>
       ) : (
         <>
-          {needsOnboarding ? (
+          {!user.emailVerified ? (
+            <>
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="*" element={<Navigate to="/verify-email" replace />} />
+            </>
+          ) : needsOnboarding ? (
             <>
               <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/verify-email" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/onboarding" replace />} />
             </>
           ) : (
             <>
               <Route path="/*" element={<AppShell />} />
               <Route path="/onboarding" element={<Navigate to="/" replace />} />
+              <Route path="/verify-email" element={<Navigate to="/" replace />} />
             </>
           )}
           <Route path="/auth" element={<Navigate to="/" replace />} />

@@ -11,6 +11,7 @@ const requestLogger = require("./middlewares/requestLogger");
 const sanitizeRequest = require("./middlewares/sanitizeRequest");
 const notFoundMiddleware = require("./middlewares/notFoundMiddleware");
 const errorHandlerMiddleware = require("./middlewares/errorHandlerMiddleware");
+const { logEmailProviderStatus } = require("./services/mailService");
 
 const app = express();
 const allowedOriginConfig = process.env.CLIENT_URL || "";
@@ -54,6 +55,8 @@ const configuredOrigins = parseAllowedOrigins(allowedOriginConfig);
 const allowedOrigins = buildAllowedOrigins(configuredOrigins);
 const isLocalDevOrigin = (origin) =>
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+
+logEmailProviderStatus();
 
 app.disable("x-powered-by");
 app.use(

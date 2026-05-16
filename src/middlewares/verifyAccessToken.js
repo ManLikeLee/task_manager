@@ -13,6 +13,17 @@ const verifyAccessTokenMiddleware = (req, _res, next) => {
   const token = authHeader.split(" ")[1];
   const decoded = verifyAccessToken(token);
 
+  if (decoded.emailVerified === false) {
+    return next(
+      new AppError(
+        "Please verify your email to continue.",
+        403,
+        null,
+        "EMAIL_NOT_VERIFIED",
+      ),
+    );
+  }
+
   req.user = decoded;
 
   return next();

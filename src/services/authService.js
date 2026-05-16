@@ -2,6 +2,14 @@ const bcrypt = require("bcrypt");
 
 const userDbService = require("./database/userDbService");
 const AppError = require("../utils/AppError");
+const logger = require("../utils/logger");
+const {
+  ensureVerificationCodeIsValid,
+  issueVerificationCode,
+  markEmailVerified,
+  markInvalidAttempt,
+  normalizeEmail,
+} = require("./emailVerificationService");
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -14,6 +22,8 @@ const toSafeUser = (user) => ({
   name: user.name,
   username: user.username,
   email: user.email,
+  emailVerified: Boolean(user.emailVerified),
+  emailVerifiedAt: user.emailVerifiedAt,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
@@ -22,12 +32,14 @@ const createUser = async ({ name, username, email, passwordHash }) =>
   userDbService.createUser({
     name,
     username: username.toLowerCase(),
-    email: email.toLowerCase(),
+    email: normalizeEmail(email),
     passwordHash,
+    emailVerified: false,
+    emailVerifiedAt: null,
   });
 
 const findUserByEmail = async (email) =>
-  userDbService.getUserByEmail(email.toLowerCase());
+  userDbService.getUserByEmail(normalizeEmail(email));
 
 const findUserById = async (id) => userDbService.getUserById(id);
 
@@ -45,14 +57,16 @@ const clearRefreshToken = async (userId) =>
   });
 
 const registerUser = async (payload) => {
-  const existingUser = await findUserByEmail(payload.email);
+  const email = normalizeEmail(payload.email);
+  const username = payload.username.trim().toLowerCase();
+  const existingUser = await findUserByEmail(email);
 
   if (existingUser) {
     throw new AppError("User already exists with this email.", 409);
   }
 
   const existingUsername = await userDbService.getUserByUsername(
-    payload.username.toLowerCase(),
+    username,
     { select: { id: true } },
   );
 
@@ -63,13 +77,21 @@ const registerUser = async (payload) => {
   const passwordHash = await bcrypt.hash(payload.password, 12);
   const user = await createUser({
     name: payload.name,
-    username: payload.username,
-    email: payload.email,
+    username,
+    email,
     passwordHash,
   });
+  logger.info("auth.register_user_created", {
+    userId: user.id,
+    email: user.email,
+  });
+  const verification = await issueVerificationCode(user, { force: true });
 
   return {
     user: toSafeUser(user),
+    requiresEmailVerification: true,
+    email: user.email,
+    emailDelivery: verification.delivery,
   };
 };
 
@@ -89,9 +111,36 @@ const loginUser = async (payload) => {
     throw new AppError("Invalid email or password.", 401);
   }
 
+  if (!userRecord.emailVerified) {
+    logger.info("auth.login_unverified_user", {
+      userId: userRecord.id,
+      email: userRecord.email,
+    });
+    try {
+      const verification = await issueVerificationCode(userRecord, { force: false });
+      return {
+        requiresEmailVerification: true,
+        email: userRecord.email,
+        user: toSafeUser(userRecord),
+        emailDelivery: verification.delivery,
+      };
+    } catch (error) {
+      // Ignore resend cooldown here; user can still verify with existing code.
+      if (error.code !== "VERIFICATION_RESEND_RATE_LIMITED") {
+        throw error;
+      }
+      return {
+        requiresEmailVerification: true,
+        email: userRecord.email,
+        user: toSafeUser(userRecord),
+      };
+    }
+  }
+
   const tokenPayload = {
     sub: userRecord.id,
     email: userRecord.email,
+    emailVerified: userRecord.emailVerified,
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
@@ -120,6 +169,7 @@ const refreshUserAccessToken = async (refreshToken) => {
   const tokenPayload = {
     sub: userRecord.id,
     email: userRecord.email,
+    emailVerified: userRecord.emailVerified,
   };
   const nextRefreshToken = generateRefreshToken(tokenPayload);
 
@@ -155,6 +205,74 @@ const getSafeCurrentUser = async (userId) => {
   };
 };
 
+const verifyEmailCode = async ({ email, code }) => {
+  const normalizedEmail = normalizeEmail(email);
+  const user = await userDbService.getUserByEmail(normalizedEmail);
+
+  if (!user) {
+    throw new AppError("Invalid verification code.", 400, null, "INVALID_VERIFICATION_CODE");
+  }
+
+  if (user.emailVerified) {
+    throw new AppError(
+      "Email is already verified. Please sign in.",
+      400,
+      null,
+      "EMAIL_ALREADY_VERIFIED",
+    );
+  }
+
+  const isValid = ensureVerificationCodeIsValid(user, code);
+  if (!isValid) {
+    await markInvalidAttempt(user.id, user.emailVerificationAttempts || 0);
+    throw new AppError("Invalid verification code.", 400, null, "INVALID_VERIFICATION_CODE");
+  }
+
+  const verifiedUser = await markEmailVerified(user.id);
+  const tokenPayload = {
+    sub: verifiedUser.id,
+    email: verifiedUser.email,
+    emailVerified: true,
+  };
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshToken = generateRefreshToken(tokenPayload);
+  await updateRefreshToken(verifiedUser.id, hashToken(refreshToken));
+
+  return {
+    accessToken,
+    refreshToken,
+    user: toSafeUser(verifiedUser),
+  };
+};
+
+const resendVerificationCode = async ({ email }) => {
+  const normalizedEmail = normalizeEmail(email);
+  const user = await userDbService.getUserByEmail(normalizedEmail);
+
+  if (!user) {
+    throw new AppError("No account found for this email.", 404, null, "EMAIL_NOT_FOUND");
+  }
+  if (user.emailVerified) {
+    throw new AppError(
+      "Email is already verified. Please sign in.",
+      400,
+      null,
+      "EMAIL_ALREADY_VERIFIED",
+    );
+  }
+
+  logger.info("auth.resend_verification_requested", {
+    userId: user.id,
+    email: user.email,
+  });
+  const verification = await issueVerificationCode(user, { force: false });
+
+  return {
+    success: true,
+    emailDelivery: verification.delivery,
+  };
+};
+
 module.exports = {
   createUser,
   findUserByEmail,
@@ -167,5 +285,7 @@ module.exports = {
   refreshUserAccessToken,
   logoutUser,
   getSafeCurrentUser,
+  verifyEmailCode,
+  resendVerificationCode,
   toSafeUser,
 };
