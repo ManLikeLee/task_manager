@@ -168,10 +168,12 @@ Client migration recommendation:
 
 Vercel in this repo is configured as **frontend-only static hosting** for the Vite app.
 
-1. Configure `VITE_API_BASE_URL` in Vercel (for example `https://api.yourdomain.com`).
+1. Configure `VITE_API_BASE_URL` in Vercel (for example `https://your-backend-url.com`).
 2. Connect the repo to Vercel and deploy; `vercel.json` runs `npm run build:client` and serves `client/dist`.
-3. Host the Express API separately (Render, Railway, Fly.io, etc.) and point `VITE_API_BASE_URL` to that backend.
-4. Verify:
+3. Host the Express/Prisma API separately (Render, Railway, Fly.io, etc.) and point `VITE_API_BASE_URL` to that backend.
+4. Host PostgreSQL separately (Supabase, Neon, Railway Postgres, etc.) and set backend `DATABASE_URL` accordingly.
+5. Set backend `CLIENT_URL` to your Vercel frontend domain (for this project: `https://task-force-beta.vercel.app`).
+6. Verify:
    - App loads at your Vercel domain and shows the intended dark Vite UI.
    - Frontend calls go to `${VITE_API_BASE_URL}/api/...` successfully.
 

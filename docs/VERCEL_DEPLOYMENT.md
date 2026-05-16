@@ -47,6 +47,22 @@ Request shape remains:
 - `${VITE_API_BASE_URL}/api/auth/login`
 - `${VITE_API_BASE_URL}/api/health`
 
+In production builds, `VITE_API_BASE_URL` is required by the frontend. If it is missing, the app throws a clear configuration error instead of silently calling same-origin `/api/*` paths.
+
+## Backend Environment (Separate Host)
+
+Deploy the Express/Prisma backend to Render, Railway, Fly.io, or similar and set at minimum:
+
+```env
+DATABASE_URL=postgresql://...
+JWT_ACCESS_SECRET=...
+JWT_REFRESH_SECRET=...
+CLIENT_URL=https://task-force-beta.vercel.app
+NODE_ENV=production
+COOKIE_SECURE=true
+COOKIE_SAMESITE=none
+```
+
 ## Local Development (Unchanged)
 
 - Backend: `npm run dev:api`

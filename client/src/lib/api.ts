@@ -2,7 +2,22 @@ import { useAuthStore } from '@/features/auth/store'
 import type { ApiErrorPayload, ApiSuccess } from '@/types/api'
 import { ApiError } from '@/types/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+const isProduction = import.meta.env.PROD
+const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim()
+const normalizedApiBaseUrl = envApiBaseUrl.replace(/\/+$/, '')
+
+const resolveApiBaseUrl = () => {
+  if (isProduction && !normalizedApiBaseUrl) {
+    throw new ApiError(
+      'Missing required VITE_API_BASE_URL in production. Set it to your deployed backend URL.',
+      500,
+      'CONFIGURATION_ERROR',
+    )
+  }
+
+  // In development, allow same-origin fallback so Vite proxy/local setups continue to work.
+  return normalizedApiBaseUrl
+}
 
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
@@ -48,6 +63,7 @@ const parseResponse = async <T>(response: Response): Promise<T> => {
 }
 
 const rawRequest = async <T>(path: string, options: RequestOptions = {}) => {
+  const apiBaseUrl = resolveApiBaseUrl()
   const authState = useAuthStore.getState()
   const headers = new Headers({
     'Content-Type': 'application/json',
@@ -57,7 +73,7 @@ const rawRequest = async <T>(path: string, options: RequestOptions = {}) => {
     headers.set('Authorization', `Bearer ${authState.accessToken}`)
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     method: options.method || 'GET',
     headers,
     credentials: 'include',
