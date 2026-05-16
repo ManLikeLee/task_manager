@@ -1,13 +1,8 @@
 {
-  "name": "task-manager",
   "version": 2,
-  "buildCommand": "npm install && npm run build:client",
+  "buildCommand": "npm run build:client",
   "outputDirectory": "client/dist",
-  "env": {
-    "NODE_ENV": "production",
-    "COOKIE_SECURE": "true",
-    "COOKIE_SAMESITE": "none"
-  },
+  "installCommand": "npm install",
   "functions": {
     "server.js": {
       "runtime": "nodejs20.x"
@@ -16,11 +11,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "server.js"
+      "dest": "/server.js"
     },
     {
       "src": "/(.*)",
-      "dest": "client/dist/index.html"
+      "dest": "/client/dist/index.html"
     }
   ]
 }
