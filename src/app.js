@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const logger = require("./utils/logger");
 
 const authRoutes = require("./routes/authRoutes");
 const routes = require("./routes");
@@ -22,14 +23,37 @@ const parseAllowedOrigins = (originsConfig) =>
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+const buildWildcardOriginRegex = (origin) => {
+  if (!origin.includes("*")) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(origin);
+    const escapedHost = parsed.hostname.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    const wildcardHost = escapedHost.replace(/\\\*/g, ".*");
+    const portPart = parsed.port ? `:${parsed.port}` : "";
+    return new RegExp(`^${parsed.protocol}//${wildcardHost}${portPart}$`, "i");
+  } catch {
+    return null;
+  }
+};
+
 const buildAllowedOrigins = (originsList) => {
   const origins = new Set();
+  const wildcardOrigins = [];
 
   if (!originsList.length) {
-    return origins;
+    return { origins, wildcardOrigins };
   }
 
   originsList.forEach((origin) => {
+    const wildcardRegex = buildWildcardOriginRegex(origin);
+    if (wildcardRegex) {
+      wildcardOrigins.push(wildcardRegex);
+      return;
+    }
+
     origins.add(origin);
 
     try {
@@ -47,15 +71,21 @@ const buildAllowedOrigins = (originsList) => {
     }
   });
 
-  return origins;
+  return { origins, wildcardOrigins };
 };
 
 const configuredOrigins = parseAllowedOrigins(allowedOriginConfig);
-const allowedOrigins = buildAllowedOrigins(configuredOrigins);
+const { origins: allowedOrigins, wildcardOrigins } = buildAllowedOrigins(configuredOrigins);
 const isLocalDevOrigin = (origin) =>
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+const isWildcardAllowedOrigin = (origin) =>
+  wildcardOrigins.some((originRegex) => originRegex.test(origin));
 
 logEmailProviderStatus();
+logger.info("cors.allowed_origins_configured", {
+  configuredOrigins,
+  wildcardOrigins: configuredOrigins.filter((origin) => origin.includes("*")),
+});
 
 app.disable("x-powered-by");
 app.use(
@@ -64,22 +94,24 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || !configuredOrigins.length || allowedOrigins.has(origin)) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || !configuredOrigins.length || allowedOrigins.has(origin) || isWildcardAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
 
-      if (isDevelopment && isLocalDevOrigin(origin)) {
-        return callback(null, true);
-      }
+    if (isDevelopment && isLocalDevOrigin(origin)) {
+      return callback(null, true);
+    }
 
-      return callback(new Error("CORS origin not allowed."));
-    },
-    credentials: true,
-  }),
-);
+    return callback(new Error("CORS origin not allowed."));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
